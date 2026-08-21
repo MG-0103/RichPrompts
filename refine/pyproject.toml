@@ -1,0 +1,33 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "refine"
+version = "0.1.0"
+description = "Refinement tool for multi-agent systems: analyze agent prompts + tools + subagents + skills, then behaviorally test them with shadow execution."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "anthropic>=0.40.0",
+    "pydantic>=2.7.0",
+    "pyyaml>=6.0",
+    "typer>=0.12.0",
+    "rich>=13.7.0",
+]
+
+[project.optional-dependencies]
+adk = [
+    "google-adk>=0.2.0",
+]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+]
+
+[project.scripts]
+refine = "refine.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["refine"]

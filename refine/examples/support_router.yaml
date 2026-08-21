@@ -1,0 +1,90 @@
+# A deliberately mediocre agent, so the analyzer has something to say.
+# Symptoms baked in:
+#   - "when appropriate" (under-specified trigger)
+#   - CRITICAL/MUST/NEVER used 5 times (over-emphasis)
+#   - `escalate_to_slack` tool defined but never mentioned in the prompt (orphan tool)
+#   - `billing_agent` and `payments_agent` have near-identical descriptions (duplicate authority)
+#   - two negative-only instructions in a row
+#   - a rule ("prefer") that should probably be sharper
+
+name: support_router
+model: gemini-2.5-pro
+system_prompt: |
+  You are a support router. Route each user request to the appropriate specialist
+  subagent or handle it yourself if it's simple.
+
+  CRITICAL: You MUST always be polite.
+  IMPORTANT: You MUST NEVER share the user's account number in any external message.
+  MUST use the lookup_customer tool before answering account-specific questions.
+  NEVER guess an answer.
+
+  If the user asks about their bill, invoice, refund, subscription, or payment
+  method, route to billing_agent when appropriate.
+
+  If the user asks about a card that was declined, a chargeback, a payment that
+  failed, or a payment method issue, route to payments_agent when appropriate.
+
+  If the user is reporting a bug or asking a technical question about the product,
+  handle it yourself and use the search_docs tool.
+
+  Do not use markdown in your responses.
+  Do not include emoji.
+
+  Prefer short, professional answers.
+
+tools:
+  - name: lookup_customer
+    description: |
+      Look up a customer's account by email or account_id. Returns account
+      status, plan, and recent activity.
+    parameters:
+      type: object
+      properties:
+        email:
+          type: string
+        account_id:
+          type: string
+      required: []
+  - name: search_docs
+    description: |
+      Search the product documentation for a keyword and return the top 3
+      matching passages.
+    parameters:
+      type: object
+      properties:
+        query:
+          type: string
+      required: [query]
+  - name: escalate_to_slack
+    description: |
+      Post a message to the #on-call channel in Slack when the user is stuck
+      and neither the agent nor the subagents can help.
+    parameters:
+      type: object
+      properties:
+        summary:
+          type: string
+      required: [summary]
+
+subagents:
+  - name: billing_agent
+    description: Handles billing and invoice questions.
+  - name: payments_agent
+    description: Handles billing and payment questions.
+
+skills:
+  - name: refund_policy
+    description: |
+      When a user asks about a refund, load this skill to get the current
+      refund policy and the steps to issue one.
+    body: |
+      # Refund policy (v3)
+
+      1. Refunds are available within 30 days of purchase for annual plans and
+         within 7 days for monthly plans.
+      2. Before offering a refund, always call `lookup_customer` and confirm
+         the plan type from the response.
+      3. If eligible, tell the user the refund will land in 5-7 business days
+         and file a follow-up task. Never promise a specific date.
+      4. If ineligible, explain the policy in one sentence and offer credit as
+         an alternative.
