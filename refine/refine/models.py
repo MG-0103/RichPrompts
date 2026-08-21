@@ -138,6 +138,14 @@ class Finding(BaseModel):
         description="Free-form location hint, e.g. 'system_prompt:l42' or 'tool:search_web'.",
     )
     source: Literal["static", "llm"] = "static"
+    docs_ref: str | None = Field(
+        default=None,
+        description=(
+            "Reference to the docs section that grounds this finding, "
+            "e.g. 'docs/06-anti-patterns.md § 8'. Populated by rules that "
+            "cite a specific principle, so the report is traceable."
+        ),
+    )
 
 
 class AnalysisReport(BaseModel):

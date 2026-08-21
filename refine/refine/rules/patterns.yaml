@@ -1,0 +1,90 @@
+# Data-driven ruleset for the static analyzer.
+#
+# Every rule cites the docs section that grounds it. If you change a rule
+# here, update the corresponding section in RichPrompts/docs/ (and vice
+# versa). The docs are the source of truth for *why*; this file is the
+# source of truth for *how the static check runs*.
+#
+# Rule types:
+#   - length:            fires when len(system_prompt) > max_chars
+#   - regex_count:       fires when pattern matches > max_hits times
+#   - line_regex_count:  fires when pattern matches at line-start on > max_hits lines
+#                        (with optional `strip_bullet: true` to ignore leading '-*+ ')
+#
+# Placeholders available in `message`:
+#   {count}       — how many hits were counted
+#   {max_hits}    — the threshold that was exceeded (regex_count / line_regex_count)
+#   {max_chars}   — the threshold that was exceeded (length)
+
+rules:
+
+  - id: prompt-too-long
+    type: length
+    max_chars: 12000
+    severity: warn
+    category: prompt-too-long
+    message: >-
+      System prompt is {count:,} characters (>{max_chars:,});
+      per-rule attention degrades at this length.
+    fix: Compress or split into a lean system prompt plus on-demand skills.
+    source: docs/06-anti-patterns.md § 2 (Instruction stacking)
+
+  - id: instruction-stacking
+    type: line_regex_count
+    pattern: '^\s*(?:[-*+]|\d+[.)]|(?:MUST|SHOULD|NEVER|DO NOT|DON''T|ALWAYS)\b)'
+    flags: [ignorecase]
+    max_hits: 40
+    severity: warn
+    category: instruction-stacking
+    message: >-
+      System prompt contains ~{count} rule-like lines (>{max_hits});
+      attention on any single rule drops.
+    fix: >-
+      Consolidate related rules, group under headings, or move rarely-firing
+      rules into on-demand skills.
+    source: docs/06-anti-patterns.md § 2 (Instruction stacking)
+
+  - id: critical-must-inflation
+    type: regex_count
+    # Non-capturing group so findall returns strings, not tuples.
+    pattern: '\b(?:CRITICAL|IMPORTANT|MUST|MANDATORY|ALWAYS|NEVER|DO NOT|DON''T)\b'
+    max_hits: 3
+    severity: info
+    category: critical-must-inflation
+    message: >-
+      Emphatic tokens (CRITICAL/MUST/NEVER/…) appear {count} times;
+      on frontier models this often causes over-triggering.
+    fix: >-
+      Reserve emphatic language for rules whose violation would cause harm;
+      downgrade the rest to 'Use this when …'.
+    source: docs/06-anti-patterns.md § 8 (Over-eager CRITICAL/MUST prompting)
+
+  - id: negative-only-instructions
+    type: line_regex_count
+    pattern: '^\s*(?:do not|don''t|never|avoid|no)\b'
+    flags: [ignorecase]
+    strip_bullet: true
+    max_hits: 2
+    severity: info
+    category: negative-only-instructions
+    message: >-
+      {count} instructions are framed as prohibitions ('do not …');
+      models suppress prohibited things less reliably than they follow
+      positive directives.
+    fix: Recast each 'Don't X' as 'Do Y' where possible.
+    source: docs/06-anti-patterns.md § 5 (Telling the model what not to do)
+
+  - id: under-specified-trigger
+    type: regex_count
+    pattern: 'when (?:appropriate|needed|necessary|possible|helpful|relevant)'
+    flags: [ignorecase]
+    max_hits: 0
+    severity: info
+    category: under-specified-trigger
+    message: >-
+      Prompt uses vague trigger phrases ('when appropriate' / 'when needed' / etc.)
+      {count} time(s); the model has to guess what 'appropriate' means.
+    fix: >-
+      Replace each with an explicit rule: 'when X', 'if the user has already Y',
+      etc.
+    source: docs/06-anti-patterns.md § 1 (Vague prompts)

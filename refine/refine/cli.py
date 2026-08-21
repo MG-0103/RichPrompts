@@ -27,7 +27,7 @@ from refine.testing import generate_test_cases, run_tests
 
 app = typer.Typer(add_completion=False, help="Refine — analyze & test multi-agent definitions.")
 # Force a stable width so pipes and log capture still render legibly.
-console = Console(width=140)
+console = Console(width=170)
 
 
 # ---------------------------------------------------------------------------
@@ -137,7 +137,8 @@ def _render_report(report) -> None:
         table.add_column("category", width=24)
         table.add_column("issue", overflow="fold")
         table.add_column("fix", overflow="fold")
-        table.add_column("where", width=24, overflow="fold")
+        table.add_column("where", width=22, overflow="fold")
+        table.add_column("docs", width=28, overflow="fold")
 
         for f in sorted(report.all_findings, key=lambda x: (0 if x.severity == "error" else 1 if x.severity == "warn" else 2)):
             sev_color = {"error": "red", "warn": "yellow", "info": "cyan"}[f.severity.value]
@@ -148,6 +149,7 @@ def _render_report(report) -> None:
                 f.message,
                 f.suggestion,
                 f.location or "-",
+                f.docs_ref or "-",
             )
         console.print(table)
     else:

@@ -1,142 +1,41 @@
 """Deterministic lints for AgentSpecs.
 
-No LLM calls. All checks are fast, idempotent, and side-effect-free.
-Each check returns zero or more Findings. `run_static_lints()` runs them
-all and returns the merged list.
+Two categories of checks:
 
-The threshold constants at the top are tunable. They are chosen to catch
-the failure modes that come up over and over in real multi-agent
-codebases, not to hit some abstract "best practice" number.
+1. **Regex- and threshold-shaped rules** live as data in
+   `refine/rules/patterns.yaml` and run through `refine.rules.run_ruleset`.
+   Every one of those rules cites the section of `docs/` that grounds it,
+   so findings are traceable back to the research.
+
+2. **Graph-shaped checks** — cross-referencing tools ↔ prompt, walking
+   the subagent list, computing similarity ratios — live here as plain
+   Python. They don't compress into data cleanly, and forcing them into
+   a rule-DSL would cost clarity for no real gain.
+
+To add a new pattern rule: edit `patterns.yaml`.
+To add a new graph rule: write a function here and add it to `CHECKS`.
 """
 
 from __future__ import annotations
 
 import re
-from collections import Counter
 from difflib import SequenceMatcher
-from typing import Iterable
 
-from refine.models import AgentSpec, Finding, Severity, SkillSpec, SubagentRef, ToolSpec
+from refine.models import AgentSpec, Finding, Severity
+from refine.rules import run_ruleset
+
 
 # ---------------------------------------------------------------------------
-# Thresholds
+# Thresholds for the graph-shaped checks (the ones that stay in Python)
 # ---------------------------------------------------------------------------
-
-MAX_PROMPT_CHARS = 12_000
-"""Above this, prompts empirically start losing per-rule attention."""
-
-MAX_INSTRUCTION_LINES = 40
-"""Rough proxy for instruction stacking — bullets, numbered items, imperatives."""
-
-MAX_CRITICAL_MUST_HITS = 3
-"""More than this and the emphatic language stops meaning anything."""
 
 SIMILARITY_THRESHOLD = 0.72
 """Ratio at which two skill/subagent descriptions are 'basically the same'."""
 
-# Regexes ---------------------------------------------------------------------
-
-_INSTRUCTION_LINE = re.compile(
-    r"^\s*(?:[-*+]|\d+[.)]|(?:MUST|SHOULD|NEVER|DO NOT|DON'T|ALWAYS)\b)",
-    re.IGNORECASE,
-)
-_CRITICAL_MUST = re.compile(
-    r"\b(?:CRITICAL|IMPORTANT|MUST|MANDATORY|ALWAYS|NEVER|DO NOT|DON'T)\b",
-)
-_NEGATIVE_ONLY = re.compile(
-    r"^\s*(?:do not|don't|never|avoid|no)\b",
-    re.IGNORECASE,
-)
-_WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-
 
 # ---------------------------------------------------------------------------
-# Individual checks
+# Graph-shaped checks
 # ---------------------------------------------------------------------------
-
-
-def check_prompt_length(agent: AgentSpec) -> list[Finding]:
-    n = len(agent.system_prompt)
-    if n <= MAX_PROMPT_CHARS:
-        return []
-    return [
-        Finding(
-            severity=Severity.WARN,
-            category="prompt-too-long",
-            message=(
-                f"System prompt is {n:,} characters (>{MAX_PROMPT_CHARS:,}); "
-                "per-rule attention degrades at this length."
-            ),
-            suggestion=(
-                "Compress or split into a lean system prompt plus on-demand skills."
-            ),
-            location="system_prompt",
-        )
-    ]
-
-
-def check_instruction_stacking(agent: AgentSpec) -> list[Finding]:
-    lines = [ln for ln in agent.system_prompt.splitlines() if _INSTRUCTION_LINE.match(ln)]
-    if len(lines) <= MAX_INSTRUCTION_LINES:
-        return []
-    return [
-        Finding(
-            severity=Severity.WARN,
-            category="instruction-stacking",
-            message=(
-                f"System prompt contains ~{len(lines)} rule-like lines "
-                f"(> {MAX_INSTRUCTION_LINES}); attention on any single rule drops."
-            ),
-            suggestion=(
-                "Consolidate related rules, group under headings, "
-                "or move rarely-firing rules into on-demand skills."
-            ),
-            location="system_prompt",
-        )
-    ]
-
-
-def check_critical_must_inflation(agent: AgentSpec) -> list[Finding]:
-    hits = _CRITICAL_MUST.findall(agent.system_prompt)
-    if len(hits) <= MAX_CRITICAL_MUST_HITS:
-        return []
-    return [
-        Finding(
-            severity=Severity.INFO,
-            category="critical-must-inflation",
-            message=(
-                f"Emphatic tokens (CRITICAL/MUST/NEVER/…) appear {len(hits)} times; "
-                "on frontier models this often causes over-triggering."
-            ),
-            suggestion=(
-                "Reserve emphatic language for rules whose violation would cause harm; "
-                "downgrade the rest to 'Use this when …'."
-            ),
-            location="system_prompt",
-        )
-    ]
-
-
-def check_negative_only_instructions(agent: AgentSpec) -> list[Finding]:
-    hits = 0
-    for line in agent.system_prompt.splitlines():
-        stripped = line.strip("-*+ \t")
-        if _NEGATIVE_ONLY.match(stripped):
-            hits += 1
-    if hits < 3:
-        return []
-    return [
-        Finding(
-            severity=Severity.INFO,
-            category="negative-only-instructions",
-            message=(
-                f"{hits} instructions are framed as prohibitions ('do not …'); "
-                "models suppress prohibited things less reliably than they follow positive directives."
-            ),
-            suggestion="Recast each 'Don't X' as 'Do Y' where possible.",
-            location="system_prompt",
-        )
-    ]
 
 
 def check_orphan_tools(agent: AgentSpec) -> list[Finding]:
@@ -154,6 +53,8 @@ def check_orphan_tools(agent: AgentSpec) -> list[Finding]:
                 f"Add a sentence telling the agent when to use '{tool.name}', or remove the tool."
             ),
             location=f"tool:{tool.name}",
+            source="static",
+            docs_ref="docs/01-fundamentals.md § 1 (Be clear and direct)",
         )
         for tool in agent.tools
         if tool.name.lower() not in body
@@ -174,6 +75,8 @@ def check_orphan_subagents(agent: AgentSpec) -> list[Finding]:
                 f"Add explicit routing guidance for '{sub.name}', or remove it from the subagent list."
             ),
             location=f"subagent:{sub.name}",
+            source="static",
+            docs_ref="docs/04-agentic-and-advanced.md § Subagent orchestration",
         )
         for sub in agent.subagents
         if sub.name.lower() not in body
@@ -195,6 +98,8 @@ def check_orphan_skills(agent: AgentSpec) -> list[Finding]:
                 f"If not, mention '{skill.name}' explicitly in the prompt."
             ),
             location=f"skill:{skill.name}",
+            source="static",
+            docs_ref="docs/04-agentic-and-advanced.md § Context engineering",
         )
         for skill in agent.skills
         if skill.name.lower() not in body
@@ -226,6 +131,8 @@ def check_duplicate_authority(agent: AgentSpec) -> list[Finding]:
                         "or merge the two skills."
                     ),
                     location=f"skills:{a.name},{b.name}",
+                    source="static",
+                    docs_ref="docs/06-anti-patterns.md § 3 (Example contamination / duplicate authority)",
                 )
             )
 
@@ -245,6 +152,8 @@ def check_duplicate_authority(agent: AgentSpec) -> list[Finding]:
                         "or collapse them into one subagent."
                     ),
                     location=f"subagents:{a.name},{b.name}",
+                    source="static",
+                    docs_ref="docs/06-anti-patterns.md § 3 (duplicate authority)",
                 )
             )
 
@@ -261,13 +170,10 @@ def check_tool_description_drift(agent: AgentSpec) -> list[Finding]:
     prompt_words = set(w.lower() for w in _WORD.findall(agent.system_prompt))
     for tool in agent.tools:
         tool_words = {w.lower() for w in _WORD.findall(tool.description)}
-        # keep only content-y words; drop common stopwords
         tool_words -= _STOPWORDS
         if not tool_words:
             continue
         overlap = tool_words & prompt_words
-        # If literally none of the tool's content words appear anywhere in
-        # the prompt, and the tool name IS in the prompt, that's a drift.
         if not overlap and tool.name.lower() in prompt_words:
             findings.append(
                 Finding(
@@ -281,6 +187,8 @@ def check_tool_description_drift(agent: AgentSpec) -> list[Finding]:
                         "Align the wording: either the tool description or the prompt is stale."
                     ),
                     location=f"tool:{tool.name}",
+                    source="static",
+                    docs_ref="docs/01-fundamentals.md § 5 (Structure prompts with delimiters)",
                 )
             )
     return findings
@@ -289,7 +197,6 @@ def check_tool_description_drift(agent: AgentSpec) -> list[Finding]:
 def check_undefined_tool_references(agent: AgentSpec) -> list[Finding]:
     """The prompt mentions a callable in tool-invocation style that isn't in the tool list."""
     tool_names = {t.name for t in agent.tools}
-    # Very light heuristic: `tool_name(` or `use the X tool`
     findings: list[Finding] = []
     call_style = set(re.findall(r"\b([a-z_][a-z0-9_]{2,})\(", agent.system_prompt))
     for name in call_style:
@@ -306,66 +213,47 @@ def check_undefined_tool_references(agent: AgentSpec) -> list[Finding]:
                         "doesn't try to invoke it."
                     ),
                     location="system_prompt",
+                    source="static",
+                    docs_ref="docs/06-anti-patterns.md § 1 (Vague prompts)",
                 )
             )
     return findings
-
-
-def check_ambiguous_when_appropriate(agent: AgentSpec) -> list[Finding]:
-    """Phrases like 'when appropriate' with no definition of what that means."""
-    hits = re.findall(
-        r"when (?:appropriate|needed|necessary|possible|helpful|relevant)",
-        agent.system_prompt,
-        flags=re.IGNORECASE,
-    )
-    if not hits:
-        return []
-    return [
-        Finding(
-            severity=Severity.INFO,
-            category="under-specified-trigger",
-            message=(
-                f"Prompt uses vague trigger phrases ({', '.join(sorted(set(h.lower() for h in hits)))}) "
-                f"{len(hits)} times; the model has to guess what 'appropriate' means."
-            ),
-            suggestion=(
-                "Replace each with an explicit rule: 'when X', 'if the user has already Y', etc."
-            ),
-            location="system_prompt",
-        )
-    ]
 
 
 # ---------------------------------------------------------------------------
 # Runner
 # ---------------------------------------------------------------------------
 
-CHECKS = [
-    check_prompt_length,
-    check_instruction_stacking,
-    check_critical_must_inflation,
-    check_negative_only_instructions,
+GRAPH_CHECKS = [
     check_orphan_tools,
     check_orphan_subagents,
     check_orphan_skills,
     check_duplicate_authority,
     check_tool_description_drift,
     check_undefined_tool_references,
-    check_ambiguous_when_appropriate,
 ]
 
 
 def run_static_lints(agent: AgentSpec) -> list[Finding]:
-    """Run every static check and return a flat list of findings."""
+    """Run every static check and return a flat list of findings.
+
+    Runs the YAML-driven ruleset first (pattern-family checks), then the
+    Python graph checks. Both produce `Finding`s with `source='static'`.
+    """
     out: list[Finding] = []
-    for check in CHECKS:
+    # 1. Data-driven pattern rules from refine/rules/patterns.yaml
+    out.extend(run_ruleset(agent))
+    # 2. Graph-shaped checks that stay Python
+    for check in GRAPH_CHECKS:
         out.extend(check(agent))
     return out
 
 
 # ---------------------------------------------------------------------------
-# Small helpers
+# Small helpers used by the graph checks above
 # ---------------------------------------------------------------------------
+
+_WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 
 _STOPWORDS = {
     "the", "a", "an", "and", "or", "of", "to", "for", "with", "in", "on",
@@ -373,11 +261,10 @@ _STOPWORDS = {
     "you", "your", "we", "our", "will", "can", "should", "must", "not",
     "do", "does", "if", "when", "then", "into", "over", "under", "any",
     "all", "one", "two", "three", "use", "used", "using", "call", "calls",
-    "return", "returns", "get", "set", "add", "list", "the", "each",
+    "return", "returns", "get", "set", "add", "list", "each",
 }
 
 _CALL_STYLE_WHITELIST = {
-    # common Python-y calls we don't want to flag as missing tools
     "print", "len", "sum", "min", "max", "int", "str", "list", "dict",
     "float", "range", "any", "all", "type", "open",
 }

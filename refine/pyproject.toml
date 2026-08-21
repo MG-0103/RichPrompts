@@ -31,3 +31,6 @@ refine = "refine.cli:app"
 
 [tool.hatch.build.targets.wheel]
 packages = ["refine"]
+# The YAML ruleset ships as package data so it's readable via
+# importlib.resources when installed as a wheel.
+include = ["refine/rules/*.yaml"]

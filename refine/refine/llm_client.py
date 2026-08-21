@@ -52,15 +52,20 @@ _client: anthropic.Anthropic | None = None
 
 def call_json(
     *,
-    system: str,
+    system: str | list[dict[str, Any]],
     user: str,
     settings: LlmSettings | None = None,
 ) -> dict[str, Any]:
     """Call Claude with `system`+`user`, expect a JSON object back.
 
-    We stream the request and use `.get_final_message()` — with `max_tokens`
-    at 16k on a reasoning-heavy call this keeps us well under the SDK's
-    HTTP timeout even if the model thinks for a while.
+    `system` accepts either a plain string or a list of text blocks. Use
+    the list form when you want to attach `cache_control` to a specific
+    block — e.g. a large stable docs block that should be cached across
+    per-agent calls.
+
+    We stream the request and use `.get_final_message()` — with
+    `max_tokens` at 16k on a reasoning-heavy call this keeps us well
+    under the SDK's HTTP timeout even if the model thinks for a while.
     """
     settings = settings or LlmSettings()
     client = get_client()

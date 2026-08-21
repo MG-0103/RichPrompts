@@ -18,26 +18,27 @@ Two phases, either usable on its own.
 
 ### Phase A — Analyse (`refine analyze`)
 
-For each agent, produces a report of two kinds of findings:
+For each agent, produces a report of two kinds of findings — each one
+carrying a `docs_ref` back to the section of `../docs/` that grounds
+it, so every finding is traceable to the research it comes from.
 
 - **Static lints** (deterministic, no LLM):
-  - prompt length outliers
-  - instruction stacking (rule count past the point where attention degrades)
-  - `CRITICAL / MUST / NEVER` inflation (over-eager on frontier models)
-  - negative-only instructions (the model suppresses "don't X" less
-    reliably than it follows "do Y")
-  - orphan tools / subagents / skills — defined but never referenced in
-    the prompt
-  - duplicate authority — two skills or two subagents with near-identical
-    descriptions, so routing is a coin flip
-  - tool-description drift — the prompt talks about a tool but none of
-    its docstring words appear anywhere in the prompt
-  - undefined tool references — `foo(` in the prompt with no matching tool
-  - under-specified triggers — `"when appropriate"`, `"if needed"`, etc.
+  - _Pattern-family rules live in `refine/rules/patterns.yaml`_ —
+    prompt-too-long, instruction-stacking, `CRITICAL/MUST` inflation,
+    negative-only instructions, under-specified triggers
+    (`"when appropriate"`, etc.). Adding or tuning one is a YAML edit,
+    not a code change.
+  - _Graph-shaped checks live in `refine/analyze/static.py`_ —
+    orphan tools/subagents/skills, duplicate authority
+    (near-identical descriptions), tool-description drift, undefined
+    tool references. These walk the AgentSpec structure so they stay
+    in Python.
 - **LLM findings + suggested rewrite** (Claude Opus 5, adaptive thinking):
-  what's necessary vs. compressible, contradictions, enforcement drift,
-  missing rationale — each with a one-sentence concrete fix, plus a
-  proposed rewrite of the system prompt.
+  `docs/01-fundamentals.md`, `docs/06-anti-patterns.md`, and
+  `BEST_TECHNIQUES.md` are loaded into the reviewer's system prompt as
+  a cached block, and the reviewer is asked to evaluate the agent
+  against those principles and cite the section that applies. Editing
+  the docs updates the reviewer's judgment — no code change.
 
 ### Phase B — Test (`refine test`)
 
