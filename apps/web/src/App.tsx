@@ -14,9 +14,13 @@ import { installProviders } from './monaco/providers'
 import { ProblemsPanel } from './components/ProblemsPanel'
 import { RegistryPanel } from './components/RegistryPanel'
 import { ScoreBadge } from './components/ScoreBadge'
+import { LLMReviewPanel } from './components/LLMReviewPanel'
 import { useRegistry } from './hooks/useRegistry'
 import { useScore } from './hooks/useScore'
+import { useLLMReview } from './hooks/useLLMReview'
 import './App.css'
+
+type BottomTab = 'problems' | 'registry' | 'review'
 
 const FIXTURES: Record<DocType, string> = {
   prompt: badPrompt,
@@ -38,6 +42,8 @@ function App() {
   const diagnostics = useLinter(source, docType)
   const { breakdown, history } = useScore(source, docType, diagnostics)
   const { findings: registryFindings, rescan } = useRegistry()
+  const llm = useLLMReview()
+  const [bottomTab, setBottomTab] = useState<BottomTab>('problems')
 
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<Monaco | null>(null)
@@ -116,8 +122,44 @@ function App() {
         />
       </div>
       <div className="bottom">
-        <ProblemsPanel diagnostics={diagnostics} onJump={jumpTo} />
-        <RegistryPanel findings={registryFindings} onRescan={rescan} />
+        <div className="bottom-tabs">
+          <button
+            className={`btab ${bottomTab === 'problems' ? 'active' : ''}`}
+            onClick={() => setBottomTab('problems')}
+          >
+            Problems <span className="btab-count">{diagnostics.length}</span>
+          </button>
+          <button
+            className={`btab ${bottomTab === 'registry' ? 'active' : ''}`}
+            onClick={() => setBottomTab('registry')}
+          >
+            Registry <span className="btab-count">{registryFindings.length}</span>
+          </button>
+          <button
+            className={`btab tier3 ${bottomTab === 'review' ? 'active' : ''}`}
+            onClick={() => setBottomTab('review')}
+          >
+            LLM Review
+          </button>
+        </div>
+        <div className="bottom-body">
+          {bottomTab === 'problems' && (
+            <ProblemsPanel diagnostics={diagnostics} onJump={jumpTo} />
+          )}
+          {bottomTab === 'registry' && (
+            <RegistryPanel findings={registryFindings} onRescan={rescan} />
+          )}
+          {bottomTab === 'review' && (
+            <LLMReviewPanel
+              apiKey={llm.apiKey}
+              setApiKey={llm.setApiKey}
+              loading={llm.loading}
+              output={llm.output}
+              error={llm.error}
+              onReview={() => llm.review(docType, source, diagnostics)}
+            />
+          )}
+        </div>
       </div>
     </div>
   )

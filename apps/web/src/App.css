@@ -8,11 +8,97 @@
 }
 .bottom {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-rows: auto 1fr;
   border-top: 1px solid #333;
   overflow: hidden;
 }
-.bottom > * + * { border-left: 1px solid #333; }
+.bottom-tabs {
+  display: flex;
+  gap: 2px;
+  background: #252525;
+  padding: 4px 8px 0;
+}
+.btab {
+  font-size: 12px;
+  padding: 6px 14px;
+  background: transparent;
+  color: #999;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 4px 4px 0 0;
+  cursor: pointer;
+}
+.btab:hover { color: #ddd; background: #2a2a2a; }
+.btab.active { background: #1e1e1e; color: #fff; border-color: #333; }
+.btab.tier3 { color: #b88; }
+.btab.tier3.active { color: #daa; }
+.btab-count {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 5px;
+  font-size: 10px;
+  background: #333;
+  border-radius: 8px;
+}
+.bottom-body { overflow: hidden; display: flex; flex-direction: column; }
+
+.llm-panel {
+  padding: 12px 16px;
+  overflow-y: auto;
+  font-size: 13px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-left: 3px solid #a55;
+}
+.llm-header { display: flex; align-items: center; justify-content: space-between; }
+.llm-badge {
+  font-size: 11px;
+  font-weight: 600;
+  color: #d99;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.llm-keyrow { display: flex; gap: 6px; }
+.llm-key {
+  flex: 1;
+  padding: 5px 8px;
+  background: #2a2a2a;
+  border: 1px solid #333;
+  border-radius: 3px;
+  color: #ddd;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.llm-toggle {
+  padding: 3px 10px;
+  font-size: 11px;
+  background: #333;
+  color: #ccc;
+  border: none;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.llm-error {
+  padding: 8px 12px;
+  background: #3a1a1a;
+  border: 1px solid #722;
+  border-radius: 3px;
+  color: #f88;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.llm-output {
+  white-space: pre-wrap;
+  font-family: system-ui, sans-serif;
+  color: #ddd;
+  margin: 0;
+  padding: 10px 12px;
+  background: #232323;
+  border-radius: 3px;
+  line-height: 1.5;
+}
+.llm-hint { color: #888; font-size: 12px; font-style: italic; }
 
 .app-header {
   display: flex;
