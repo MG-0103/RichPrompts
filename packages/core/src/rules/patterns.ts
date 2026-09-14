@@ -1,4 +1,4 @@
-import type { Diagnostic, ParsedDoc, Rule, RuleContext } from '../types'
+import type { Diagnostic, Rule, RuleContext } from '../types'
 
 const promptTooLong: Rule = {
   id: 'prompt/too-long',

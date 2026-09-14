@@ -1,6 +1,6 @@
 import type { editor, languages, IRange, Position, CancellationToken } from 'monaco-editor'
 import type { Diagnostic } from '@richprompt/core'
-import { offsetToRange, MARKER_OWNER } from './adapter'
+import { offsetToRange } from './adapter'
 
 type MonacoNS = typeof import('monaco-editor')
 
@@ -37,7 +37,7 @@ export function installProviders(mon: MonacoNS, store: DiagnosticStore, language
     ) {
       const actions: languages.CodeAction[] = []
       for (const marker of context.markers) {
-        if (marker.owner !== MARKER_OWNER) continue
+        if (!marker.source) continue
         const hit = store.current.find(
           d =>
             d.ruleId === marker.source &&

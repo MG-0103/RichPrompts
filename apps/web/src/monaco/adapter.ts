@@ -5,7 +5,7 @@ export const MARKER_OWNER = 'richprompt'
 
 type MonacoNS = typeof import('monaco-editor')
 
-function severityToMarker(mon: MonacoNS, s: Severity): editor.MarkerSeverity {
+function severityToMarker(mon: MonacoNS, s: Severity): number {
   switch (s) {
     case 'error': return mon.MarkerSeverity.Error
     case 'warn': return mon.MarkerSeverity.Warning
