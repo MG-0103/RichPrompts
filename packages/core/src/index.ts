@@ -32,6 +32,8 @@ export type {
   RegistryConfig,
 } from './registry'
 export { similarity, trigrams, jaccard } from './similarity'
+export { scoreDiagnostics, hashContent, defaultWeights } from './score'
+export type { ScoreBreakdown, ScoreWeights } from './score'
 
 import { parseDocument } from './parser'
 import { parseToolDocument } from './toolParser'

@@ -13,7 +13,9 @@ import { diagnosticsToMarkers, MARKER_OWNER, offsetToRange } from './monaco/adap
 import { installProviders } from './monaco/providers'
 import { ProblemsPanel } from './components/ProblemsPanel'
 import { RegistryPanel } from './components/RegistryPanel'
+import { ScoreBadge } from './components/ScoreBadge'
 import { useRegistry } from './hooks/useRegistry'
+import { useScore } from './hooks/useScore'
 import './App.css'
 
 const FIXTURES: Record<DocType, string> = {
@@ -34,6 +36,7 @@ function App() {
   const source = sources[docType]
   const language = LANGUAGE_FOR[docType]
   const diagnostics = useLinter(source, docType)
+  const { breakdown, history } = useScore(source, docType, diagnostics)
   const { findings: registryFindings, rescan } = useRegistry()
 
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
@@ -99,6 +102,7 @@ function App() {
             </button>
           ))}
         </div>
+        <ScoreBadge breakdown={breakdown} history={history} />
       </header>
       <div className="editor-pane">
         <Editor
