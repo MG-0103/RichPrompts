@@ -25,3 +25,47 @@ Under deliberation:
   embeddings (local `Xenova/all-MiniLM-L6-v2` via transformers.js, or
   hosted API). Trigger only if trigram misses semantic paraphrases
   users care about (evaluate on real registry data first).
+
+## Phase 9 — Versioning + diff + restore
+
+Linear history per doc with the ability to restore any prior iteration
+and diff against it.
+
+**Design (locked):**
+- Extend `Snapshot` with optional `content: string` and optional
+  `label: string`. Old (metadata-only) snapshots kept read-only and
+  rotate out naturally.
+- Storage: same `localStorage` key `richprompt.snapshots.v1`. Cap 50
+  unnamed per doc, named unlimited (~1.5MB budget vs ~5MB cap).
+- Cadence unchanged: 1.5s auto + hash-dedupe.
+- Restore = clone-forward (creates a new snapshot with old content,
+  labeled `restored from vN`). Nothing is ever lost. Confirm dialog
+  only when current content is not in any existing snapshot.
+- Dep: `diff` (kpdecker/jsdiff, ~30kb). Skip `isomorphic-git` (800kb,
+  wrong shape for single-file editor).
+- UI: new "History" bottom tab. Version list (timestamp / score /
+  delta / label / restore / delete). Click one → inline unified diff
+  vs current. Select two → diff between them.
+
+**Explicit skips:** branching, merge, remote sync, side-by-side diff
+view, cross-doc diff.
+
+**Est:** ~250 lines + 1 dep.
+
+## Storage migration — localStorage → IndexedDB
+
+Snapshots (phase 5, and phase 9 once built) live in `localStorage`
+under one key. Fine for now (~1.5MB budget vs ~5MB cap), synchronous
+access is imperceptible at our sizes.
+
+**Migrate when either triggers:**
+- Observed usage > 2MB (approaching quota; a doc with 50 pinned versions
+  at 30KB each already crosses it)
+- Users want cross-tab live sync (localStorage is per-tab; IndexedDB has
+  a broadcast channel)
+
+**How:** ~100 lines of adapter with the same shape as
+`apps/web/src/persistence/snapshots.ts` — async fns behind the same
+call sites. `idb-keyval` (~1kb) covers 90% of the need.
+
+Cross-device / team sharing = backend, separate concern.
