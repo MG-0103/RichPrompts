@@ -15,12 +15,15 @@ import { ProblemsPanel } from './components/ProblemsPanel'
 import { RegistryPanel } from './components/RegistryPanel'
 import { ScoreBadge } from './components/ScoreBadge'
 import { LLMReviewPanel } from './components/LLMReviewPanel'
+import { SettingsPanel } from './components/SettingsPanel'
 import { useRegistry } from './hooks/useRegistry'
 import { useScore } from './hooks/useScore'
 import { useLLMReview } from './hooks/useLLMReview'
+import { loadConfig, resetConfig, saveConfig } from './persistence/config'
+import type { RuleConfig } from '@richprompt/core'
 import './App.css'
 
-type BottomTab = 'problems' | 'registry' | 'review'
+type BottomTab = 'problems' | 'registry' | 'review' | 'settings'
 
 const FIXTURES: Record<DocType, string> = {
   prompt: badPrompt,
@@ -39,7 +42,10 @@ function App() {
   const [sources, setSources] = useState<Record<DocType, string>>(FIXTURES)
   const source = sources[docType]
   const language = LANGUAGE_FOR[docType]
-  const diagnostics = useLinter(source, docType)
+  const [config, setConfigState] = useState<RuleConfig>(() => loadConfig())
+  const updateConfig = (cfg: RuleConfig) => { setConfigState(cfg); saveConfig(cfg) }
+  const resetConfigToDefault = () => { resetConfig(); setConfigState(loadConfig()) }
+  const diagnostics = useLinter(source, docType, config)
   const { breakdown, history } = useScore(source, docType, diagnostics)
   const { findings: registryFindings, rescan } = useRegistry()
   const llm = useLLMReview()
@@ -141,6 +147,12 @@ function App() {
           >
             LLM Review
           </button>
+          <button
+            className={`btab ${bottomTab === 'settings' ? 'active' : ''}`}
+            onClick={() => setBottomTab('settings')}
+          >
+            Settings
+          </button>
         </div>
         <div className="bottom-body">
           {bottomTab === 'problems' && (
@@ -157,6 +169,13 @@ function App() {
               output={llm.output}
               error={llm.error}
               onReview={() => llm.review(docType, source, diagnostics)}
+            />
+          )}
+          {bottomTab === 'settings' && (
+            <SettingsPanel
+              config={config}
+              onChange={updateConfig}
+              onReset={resetConfigToDefault}
             />
           )}
         </div>

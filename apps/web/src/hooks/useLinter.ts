@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Diagnostic, DocType } from '@richprompt/core'
+import type { Diagnostic, DocType, RuleConfig } from '@richprompt/core'
 import LintWorker from '../worker/lint.worker?worker'
 import type { LintRequest, LintResponse } from '../worker/lint.worker'
 
 const DEBOUNCE_MS = 0
 
-export function useLinter(raw: string, docType: DocType = 'prompt') {
+export function useLinter(raw: string, docType: DocType = 'prompt', config?: RuleConfig) {
   const [diagnostics, setDiagnostics] = useState<Diagnostic[]>([])
   const workerRef = useRef<Worker | null>(null)
   const seqRef = useRef(0)
@@ -29,11 +29,11 @@ export function useLinter(raw: string, docType: DocType = 'prompt') {
     const t = setTimeout(() => {
       if (!workerRef.current) return
       const id = ++seqRef.current
-      const req: LintRequest = { id, raw, docType }
+      const req: LintRequest = { id, raw, docType, config }
       workerRef.current.postMessage(req)
     }, DEBOUNCE_MS)
     return () => clearTimeout(t)
-  }, [raw, docType])
+  }, [raw, docType, config])
 
   return diagnostics
 }

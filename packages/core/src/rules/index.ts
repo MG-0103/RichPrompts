@@ -21,3 +21,11 @@ export function rulesFor(docType: DocType): Rule[] {
 }
 
 export { structuralRules, patternRules, toolRules, skillRules }
+
+export const allRules: Rule[] = (() => {
+  const seen = new Map<string, Rule>()
+  for (const r of [...structuralRules, ...patternRules, ...toolRules, ...skillRules]) {
+    if (!seen.has(r.id)) seen.set(r.id, r)
+  }
+  return [...seen.values()]
+})()

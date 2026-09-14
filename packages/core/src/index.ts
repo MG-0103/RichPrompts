@@ -12,6 +12,7 @@ export {
   patternRules,
   toolRules,
   skillRules,
+  allRules,
   rulesFor,
 } from './rules'
 export { badPrompt } from './fixtures/badPrompt'
