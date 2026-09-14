@@ -18,6 +18,20 @@ export { badPrompt } from './fixtures/badPrompt'
 export { goodPrompt } from './fixtures/goodPrompt'
 export { badTool } from './fixtures/badTool'
 export { badSkill } from './fixtures/badSkill'
+export { sampleRegistryTools, sampleRegistrySkills } from './fixtures/sampleRegistry'
+export {
+  buildRegistry,
+  runRegistryRules,
+  defaultRegistryConfig,
+} from './registry'
+export type {
+  Registry,
+  RegistryToolEntry,
+  RegistrySkillEntry,
+  RegistryFinding,
+  RegistryConfig,
+} from './registry'
+export { similarity, trigrams, jaccard } from './similarity'
 
 import { parseDocument } from './parser'
 import { parseToolDocument } from './toolParser'
