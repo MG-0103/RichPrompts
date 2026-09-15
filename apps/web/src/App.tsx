@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Editor, { type Monaco } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import {
@@ -61,6 +61,46 @@ function App() {
       return next
     })
   }
+  const [splitRatio, setSplitRatio] = useState<number>(() => {
+    try {
+      const v = parseFloat(localStorage.getItem('richprompt.preview.split') ?? '')
+      return Number.isFinite(v) && v >= 0.15 && v <= 0.85 ? v : 0.5
+    } catch { return 0.5 }
+  })
+  const paneRef = useRef<HTMLDivElement | null>(null)
+  const draggingRef = useRef(false)
+  const previewScrollRef = useRef<HTMLDivElement | null>(null)
+  const syncingRef = useRef<'editor' | 'preview' | null>(null)
+
+  const startDrag = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    draggingRef.current = true
+    document.body.classList.add('splitter-dragging')
+  }, [])
+
+  useEffect(() => {
+    const onMove = (e: MouseEvent) => {
+      if (!draggingRef.current) return
+      const pane = paneRef.current
+      if (!pane) return
+      const rect = pane.getBoundingClientRect()
+      const ratio = (e.clientX - rect.left) / rect.width
+      const clamped = Math.min(0.85, Math.max(0.15, ratio))
+      setSplitRatio(clamped)
+    }
+    const onUp = () => {
+      if (!draggingRef.current) return
+      draggingRef.current = false
+      document.body.classList.remove('splitter-dragging')
+      try { localStorage.setItem('richprompt.preview.split', String(splitRatio)) } catch { /* ignore */ }
+    }
+    window.addEventListener('mousemove', onMove)
+    window.addEventListener('mouseup', onUp)
+    return () => {
+      window.removeEventListener('mousemove', onMove)
+      window.removeEventListener('mouseup', onUp)
+    }
+  }, [splitRatio])
 
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<Monaco | null>(null)
@@ -96,6 +136,35 @@ function App() {
     if (!providerCleanupRef.current.has(language)) {
       providerCleanupRef.current.set(language, installProviders(mon, storeRef.current, language))
     }
+    ed.onDidScrollChange(() => {
+      if (syncingRef.current === 'preview') return
+      const preview = previewScrollRef.current
+      if (!preview) return
+      const top = ed.getScrollTop()
+      const max = ed.getScrollHeight() - ed.getLayoutInfo().height
+      if (max <= 0) return
+      const pct = top / max
+      const pmax = preview.scrollHeight - preview.clientHeight
+      if (pmax <= 0) return
+      syncingRef.current = 'editor'
+      preview.scrollTop = pct * pmax
+      requestAnimationFrame(() => { syncingRef.current = null })
+    })
+  }
+
+  const onPreviewScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (syncingRef.current === 'editor') return
+    const ed = editorRef.current
+    if (!ed) return
+    const el = e.currentTarget
+    const pmax = el.scrollHeight - el.clientHeight
+    if (pmax <= 0) return
+    const pct = el.scrollTop / pmax
+    const max = ed.getScrollHeight() - ed.getLayoutInfo().height
+    if (max <= 0) return
+    syncingRef.current = 'preview'
+    ed.setScrollTop(pct * max)
+    requestAnimationFrame(() => { syncingRef.current = null })
   }
 
   const jumpTo = (d: Diagnostic) => {
@@ -134,7 +203,13 @@ function App() {
           {previewOpen ? 'Hide preview' : 'Show preview'}
         </button>
       </header>
-      <div className={`editor-pane ${previewOpen ? 'split' : ''}`}>
+      <div
+        ref={paneRef}
+        className={`editor-pane ${previewOpen ? 'split' : ''}`}
+        style={previewOpen ? {
+          gridTemplateColumns: `${splitRatio * 100}% 4px 1fr`,
+        } : undefined}
+      >
         <div className="editor-col">
           <Editor
             height="100%"
@@ -147,9 +222,22 @@ function App() {
           />
         </div>
         {previewOpen && (
-          <div className="preview-col">
-            <PreviewPane source={source} docType={docType} />
-          </div>
+          <>
+            <div
+              className="splitter"
+              onMouseDown={startDrag}
+              role="separator"
+              aria-orientation="vertical"
+            />
+            <div className="preview-col">
+              <PreviewPane
+                ref={previewScrollRef}
+                source={source}
+                docType={docType}
+                onScroll={onPreviewScroll}
+              />
+            </div>
+          </>
         )}
       </div>
       <div className="bottom">

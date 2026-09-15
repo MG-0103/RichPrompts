@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { forwardRef, useMemo } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
@@ -6,7 +6,11 @@ import rehypeHighlight from 'rehype-highlight'
 import type { DocType } from '@richprompt/core'
 import 'highlight.js/styles/github-dark.css'
 
-type Props = { source: string; docType: DocType }
+type Props = {
+  source: string
+  docType: DocType
+  onScroll?: (e: React.UIEvent<HTMLDivElement>) => void
+}
 
 type ToolShape = {
   name?: unknown
@@ -78,12 +82,17 @@ function ToolPreview({ source }: { source: string }) {
   )
 }
 
-export function PreviewPane({ source, docType }: Props) {
+export const PreviewPane = forwardRef<HTMLDivElement, Props>(function PreviewPane(
+  { source, docType, onScroll },
+  scrollRef,
+) {
   if (docType === 'tool') {
     return (
       <div className="preview-pane">
         <div className="preview-label">tool card (as model sees it)</div>
-        <ToolPreview source={source} />
+        <div className="preview-scroll" ref={scrollRef} onScroll={onScroll}>
+          <ToolPreview source={source} />
+        </div>
       </div>
     )
   }
@@ -92,7 +101,11 @@ export function PreviewPane({ source, docType }: Props) {
       <div className="preview-label">
         rendered {docType === 'skill' ? 'SKILL.md' : 'prompt'}
       </div>
-      <div className="preview-md">
+      <div
+        className="preview-md preview-scroll"
+        ref={scrollRef}
+        onScroll={onScroll}
+      >
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeSanitize, rehypeHighlight]}
@@ -102,4 +115,4 @@ export function PreviewPane({ source, docType }: Props) {
       </div>
     </div>
   )
-}
+})

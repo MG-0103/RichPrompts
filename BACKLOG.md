@@ -52,6 +52,30 @@ view, cross-doc diff.
 
 **Est:** ~250 lines + 1 dep.
 
+## Preview pane — diagnostic-span highlighting
+
+The MD/tool preview shows what the model sees, but hovering a
+Problems row doesn't highlight the corresponding span in the
+preview yet. Doable but non-trivial:
+
+- Configure the markdown pipeline to preserve source positions
+  (remark already carries `position.start.offset` /
+  `position.end.offset` on AST nodes — free).
+- Write a rehype plugin that stamps every rendered element with
+  `data-src-start` / `data-src-end`.
+- On hover/click of a Problems row, walk the preview DOM, find
+  nodes whose range overlaps the diagnostic, add a highlight class.
+- Partial-node highlighting (a diagnostic mid-paragraph) requires
+  splitting text nodes via the Range API, re-applied on each
+  render — fiddly.
+
+**Skip until:** users report actually wanting it. The Problems
+panel already jumps the editor to the span, which handles the
+"where is this" question in the more useful direction. Sync
+scroll (shipped) makes finding it in the preview a scroll away.
+
+**Est:** 1–2 days.
+
 ## Storage migration — localStorage → IndexedDB
 
 Snapshots (phase 5, and phase 9 once built) live in `localStorage`
