@@ -88,6 +88,109 @@ sidecar owns anything model-touching. Contract in
   passRate regression. Companion GitHub Action.
 
 
+## Phase 7 — Workspace file loader (NOT SHIPPED — needs deliberation)
+
+**The gap this closes.** Everything today reads from
+`packages/core/src/fixtures/sampleRegistry.ts` — three hardcoded tools
+and two hardcoded skills. A real user has their tools/skills in files
+on disk and has no way to point the linter at them. Every downstream
+phase (P16 polish, P17 distractor, P18 CI gate) is only meaningful
+once P7 lands. Without it the product is a demo of an idea.
+
+### Three deployment shapes considered
+
+| # | Files reach the app via | Runs where | Trade-off |
+|---|---|---|---|
+| A | Browser FS Access API (`showDirectoryPicker`) | Pure client | Chromium-only. Safari + Firefox don't support it. |
+| B | Local HTTP bridge process | Client + a `richprompt serve ./workspace` CLI | Cross-browser. One more process. **Shares code with P18 CI export.** |
+| C | Cloud / VCS backend | Server-side | Overkill for a per-developer tool. Real product path. |
+
+### Recommendation: approach B
+
+Deferring for user confirmation, but the reasoning:
+
+1. **Cross-browser.** A is Chromium-only. B works everywhere.
+2. **Code reuse with P18.** The Node process that serves files in dev
+   is the same code path the CI CLI (P18) needs — walk the workspace,
+   parse each doc, hand it to the sidecar. Splitting the walker into
+   `packages/workspace/` lets P7 and P18 share one implementation
+   instead of writing that logic twice.
+3. **Watchable.** chokidar catches edits from other tools (VS Code,
+   your editor of choice) and streams them into the linter via SSE.
+
+### Approach B — concrete shape
+
+Three-process dev now: vite (5173) + testrunner sidecar (8787) + new
+file bridge (8788). All on 127.0.0.1, no auth.
+
+```
+packages/workspace/         ← shared library (P7 + P18)
+  index.ts   walkWorkspace, parseDoc, writeDoc
+  glob.ts    *.tool.json / SKILL.md discovery
+  types.ts   DocEntry, Workspace shape
+
+services/filebridge/        ← thin HTTP wrapper (P7 only)
+  main.ts    imports packages/workspace, adds HTTP+SSE
+
+packages/testrunner-cli/    ← P18 later
+  main.ts    imports packages/workspace, calls sidecar directly
+```
+
+**Bridge endpoints (small, boring):**
+- `GET /health` → `{ ok, workspace, version }`
+- `GET /workspace` → `{ path, docs: [{ id, kind, relPath, mtime }] }`
+- `GET /doc?path=…` → `{ path, content, mtime }`
+- `PUT /doc` body `{ path, content, ifMatchMtime? }` — writes back;
+  return 409 on mtime mismatch (optimistic concurrency).
+- `GET /events` (SSE) → `{ kind: 'changed'|'added'|'removed', path, mtime }`
+
+**Web-side changes (~150 lines):**
+- `useRegistry`: on mount, GET /health; if 200 → workspace mode, else
+  fall back to sample fixture. Enumerate via /workspace, hydrate via
+  /doc.
+- Subscribe to `/events` SSE. On 'changed', refetch that doc unless
+  a PUT for that path is in-flight.
+- On Cmd+S / commit, PUT /doc with the mtime we started editing from.
+  On 409, prompt "file changed on disk — reload or overwrite?".
+- Workspace selector (path input) in a new corner of the header or
+  Settings tab.
+
+**Convention over config, initially:**
+- `**/*.tool.json` — each file is one tool doc.
+- `**/SKILL.md` or `**/*.skill.md` — each file is one skill doc.
+- `**/prompts/**/*.md` — optional prompt collection.
+- Add `richprompt.config.json` at the workspace root when someone
+  asks for custom layout (adds ~30 lines of glob resolver).
+
+**Concurrency model:** mtime-guard on PUT (same pattern as git).
+Never last-write-wins, never merge — those are wrong or too complex
+for a per-workspace tool.
+
+**Deps and cost:**
+- New: chokidar in the bridge (~200 kb node_modules, zero browser cost).
+- New dev command: `npm run dev:filebridge` alongside `dev` and
+  `dev:testrunner`. Same pattern as today.
+- Sidecar unchanged. Lint engine unchanged. Test runner unchanged.
+
+### Explicit skips
+- No Electron / native shell.
+- No live-sync-every-keystroke to disk (phase 9 versioning already
+  gives the "safety net" feel; disk writes go through Cmd+S).
+- No merge-on-conflict — 409 with a reload prompt is enough.
+- No auth on the bridge — it binds 127.0.0.1 only.
+
+### Est
+- `packages/workspace/`: ~250 lines.
+- `services/filebridge/`: ~200 lines.
+- Web wiring: ~150 lines.
+- Total: ~600 lines + 1 dep.
+
+### Decision still needed
+- Approach A (FS Access) vs. approach B (bridge). Recommendation is B
+  because it's cross-browser AND shares code with P18. Approach A is
+  cheaper (~300 lines, no new process) but Chromium-only and duplicates
+  logic P18 will need anyway.
+
 ## Phase 4 — Registry checks (extensions)
 
 Current impl checks within-kind description overlap (tool↔tool, skill↔skill).
