@@ -428,6 +428,173 @@ body.splitter-dragging .preview-col { pointer-events: none; }
 }
 .registry-title .vs { color: #666; }
 .registry-msg { color: #ccc; margin-top: 2px; }
+.tests-panel { overflow-y: auto; font-size: 13px; padding-bottom: 12px; }
+.tests-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 16px;
+  font-weight: 600;
+  color: #ccc;
+  background: #252525;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.tests-actions { margin-left: auto; display: flex; gap: 6px; }
+.tests-error {
+  margin: 6px 16px;
+  padding: 8px 12px;
+  background: #3a1a1a;
+  border: 1px solid #722;
+  border-radius: 3px;
+  color: #f88;
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+}
+.tests-hint {
+  margin: 6px 16px;
+  padding: 8px 12px;
+  background: #2a2a1a;
+  border: 1px solid #554;
+  border-radius: 3px;
+  color: #dc9;
+  font-size: 12px;
+}
+.tests-hint code {
+  background: #1e1e1e;
+  padding: 1px 5px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+.tests-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  margin-top: 4px;
+}
+.tests-table th {
+  text-align: left;
+  padding: 6px 8px;
+  color: #888;
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: 10px;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #333;
+}
+.tests-table td {
+  padding: 6px 8px;
+  border-bottom: 1px solid #262626;
+  vertical-align: middle;
+}
+.tests-table tr:hover td { background: #232323; }
+.t-id { font-family: ui-monospace, monospace; color: #7aa; white-space: nowrap; }
+.t-q { color: #ccc; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
+.t-exp { font-family: ui-monospace, monospace; color: #d90; white-space: nowrap; }
+.t-actions { text-align: right; white-space: nowrap; }
+.mono { font-family: ui-monospace, monospace; }
+.dim { color: #555; }
+.tests-empty { padding: 14px 16px; color: #666; text-align: center; }
+.link-btn {
+  background: transparent;
+  border: none;
+  color: #7cf;
+  font-size: 11px;
+  padding: 2px 6px;
+  cursor: pointer;
+}
+.link-btn:hover { text-decoration: underline; }
+.link-btn.danger { color: #e77; }
+
+.sidecar-badge {
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid #333;
+}
+.sidecar-badge.up { color: #6c6; border-color: #363; background: #1a2a1a; }
+.sidecar-badge.down { color: #e77; border-color: #533; background: #2a1a1a; }
+.sidecar-badge.unknown { color: #888; background: #232323; }
+
+.pass-bar {
+  position: relative;
+  width: 80px;
+  height: 14px;
+  background: #262626;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.pass-fill {
+  height: 100%;
+  transition: width 0.2s;
+}
+.pass-bar.tone-good .pass-fill { background: #3a6; }
+.pass-bar.tone-ok   .pass-fill { background: #b83; }
+.pass-bar.tone-bad  .pass-fill { background: #a44; }
+.pass-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  color: #fff;
+}
+
+.test-editor-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.test-editor {
+  background: #1e1e1e;
+  border: 1px solid #333;
+  border-radius: 6px;
+  padding: 18px 22px;
+  width: 480px;
+  max-width: 90vw;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.editor-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ddd;
+  margin-bottom: 4px;
+}
+.ef { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #aaa; }
+.ef span { color: #888; }
+.ef em {
+  color: #e77;
+  font-style: normal;
+  font-size: 11px;
+}
+.ef input, .ef textarea, .ef select {
+  background: #262626;
+  border: 1px solid #333;
+  border-radius: 3px;
+  color: #ddd;
+  padding: 5px 8px;
+  font-family: inherit;
+  font-size: 12px;
+}
+.ef textarea { font-family: ui-monospace, monospace; resize: vertical; }
+.ef-row { display: grid; grid-template-columns: 1fr 2fr; gap: 10px; }
+.editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
 .problems-panel.empty {
   padding: 12px 16px;
   color: #6a6;

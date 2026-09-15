@@ -8,7 +8,8 @@
   ],
   "scripts": {
     "dev": "npm run dev --workspace @richprompt/web",
-    "test": "npm run test --workspace @richprompt/core"
+    "test": "npm run test --workspace @richprompt/core",
+    "dev:testrunner": "cd services/testrunner && uvicorn app.main:app --port 8787 --reload"
   },
   "repository": {
     "type": "git",

@@ -2,6 +2,47 @@
 
 Deferred ideas, revisit before shipping.
 
+## Phase 10 → 18 — Stub agent testing (routing-quality gate)
+
+**Goal:** for each edit to a prompt/tool/skill, verify the router still
+picks the intended target on a set of predefined queries, and quantify
+how confidently.
+
+**Composite metric decided.** `RoutingScore = 0.7 * passRate + 0.3 *
+norm(meanLogprob)`. Secondary: mean trajectory steps, `descriptionDelta`
+from names-only ablation. Reasoning tokens rejected as too noisy on
+their own.
+
+**Framework:** Google ADK (Python sidecar). Web app is TS/React;
+sidecar owns anything model-touching. Contract in
+`packages/core/src/testing.ts`, mirrored in
+`services/testrunner/app/schemas.py`.
+
+**Storage:** per-workspace test cases in localStorage
+(`richprompt.tests.v1`).
+
+### Phase status
+
+- **10 — Foundations (mock runner + contract):** SHIPPED.
+- **11 — Real ADK single rollout:** next. Replace `mock_runner.py`
+  with an ADK agent built from prompt+tools+skills. Capture the
+  tool call, args, latency, trajectory steps.
+- **12 — N-rollout pass rate + logprob:** aggregate over N=5 at
+  temp=0.7. Cache by content hash so re-runs are free.
+- **13 — Tests tab authoring/results UX:** editor polish, dropdowns
+  populated from live registry (no typos), SSE progress.
+- **14 — Names-only ablation:** `strip: 'descriptions'` flag on the
+  run; per-test `descriptionDelta`.
+- **15 — Snapshot-diff runs:** run same suite against two snapshots,
+  side-by-side delta. Depends on Phase 9 History being built.
+- **16 — Reliability + config:** model selection, cost preview,
+  retries, streaming results, sidecar Dockerfile.
+- **17 — Distractor injection:** paraphrased sibling tools;
+  cross-link to Tier-2 overlap detector for behavioral verification.
+- **18 — CI export:** `@richprompt/testrunner-cli`; fail a PR on
+  passRate regression. Companion GitHub Action.
+
+
 ## Phase 4 — Registry checks (extensions)
 
 Current impl checks within-kind description overlap (tool↔tool, skill↔skill).

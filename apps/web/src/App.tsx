@@ -17,14 +17,17 @@ import { ScoreBadge } from './components/ScoreBadge'
 import { LLMReviewPanel } from './components/LLMReviewPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { PreviewPane } from './components/PreviewPane'
+import { TestsPanel } from './components/TestsPanel'
 import { useRegistry } from './hooks/useRegistry'
 import { useScore } from './hooks/useScore'
 import { useLLMReview } from './hooks/useLLMReview'
+import { useTests } from './hooks/useTests'
 import { loadConfig, resetConfig, saveConfig } from './persistence/config'
+import { sampleRegistryTools, sampleRegistrySkills } from '@richprompt/core'
 import type { RuleConfig } from '@richprompt/core'
 import './App.css'
 
-type BottomTab = 'problems' | 'registry' | 'review' | 'settings'
+type BottomTab = 'problems' | 'registry' | 'review' | 'tests' | 'settings'
 
 const FIXTURES: Record<DocType, string> = {
   prompt: badPrompt,
@@ -50,6 +53,7 @@ function App() {
   const { breakdown, history } = useScore(source, docType, diagnostics)
   const { findings: registryFindings, rescan } = useRegistry()
   const llm = useLLMReview()
+  const tests = useTests()
   const [bottomTab, setBottomTab] = useState<BottomTab>('problems')
   const [previewOpen, setPreviewOpen] = useState<boolean>(() => {
     try { return localStorage.getItem('richprompt.preview.open') !== '0' } catch { return true }
@@ -261,6 +265,12 @@ function App() {
             LLM Review
           </button>
           <button
+            className={`btab ${bottomTab === 'tests' ? 'active' : ''}`}
+            onClick={() => setBottomTab('tests')}
+          >
+            Tests <span className="btab-count">{tests.tests.length}</span>
+          </button>
+          <button
             className={`btab ${bottomTab === 'settings' ? 'active' : ''}`}
             onClick={() => setBottomTab('settings')}
           >
@@ -282,6 +292,32 @@ function App() {
               output={llm.output}
               error={llm.error}
               onReview={() => llm.review(docType, source, diagnostics)}
+            />
+          )}
+          {bottomTab === 'tests' && (
+            <TestsPanel
+              tests={tests.tests}
+              results={tests.results}
+              loading={tests.loading}
+              error={tests.error}
+              sidecar={tests.sidecar}
+              onRunAll={() => tests.run({
+                prompt: sources.prompt,
+                tools: sampleRegistryTools,
+                skills: sampleRegistrySkills,
+                config: { mock: true },
+              })}
+              onRunOne={id => tests.run({
+                prompt: sources.prompt,
+                tools: sampleRegistryTools,
+                skills: sampleRegistrySkills,
+                onlyIds: [id],
+                config: { mock: true },
+              })}
+              onCancel={tests.cancel}
+              onUpsert={tests.upsert}
+              onRemove={tests.remove}
+              onReset={tests.reset}
             />
           )}
           {bottomTab === 'settings' && (

@@ -35,6 +35,15 @@ export type {
 export { similarity, trigrams, jaccard } from './similarity'
 export { scoreDiagnostics, hashContent, defaultWeights } from './score'
 export type { ScoreBreakdown, ScoreWeights } from './score'
+export type {
+  TestCase,
+  ExpectedTarget,
+  TestRunConfig,
+  TestRunRequest,
+  TestRunResponse,
+  TestResult,
+  RolloutOutcome,
+} from './testing'
 
 import { parseDocument } from './parser'
 import { parseToolDocument } from './toolParser'
