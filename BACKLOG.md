@@ -112,10 +112,18 @@ Under deliberation:
   hosted API). Trigger only if trigram misses semantic paraphrases
   users care about (evaluate on real registry data first).
 
-## Phase 9 — Versioning + diff + restore
+## Phase 9 — Versioning + diff + restore (SHIPPED — see below)
 
 Linear history per doc with the ability to restore any prior iteration
 and diff against it.
+
+**Shipped shape (revised from original design):** two-tier — auto-saves
+(2s idle debounce, hash-dedup, cap 20/doc, LRU-evicted) plus explicit
+commits (Cmd+S / "+ Commit version" with a label, kept forever until
+user deletes). jsdiff dynamic-imported so the ~4.5 kB gzipped chunk
+never hits the main bundle — only fetched on first diff render.
+
+**Original locked design below — retained for context / rationale.**
 
 **Design (locked):**
 - Extend `Snapshot` with optional `content: string` and optional

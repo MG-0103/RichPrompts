@@ -44,6 +44,7 @@ export type {
   TestResult,
   RolloutOutcome,
 } from './testing'
+export type { Version, VersionKind } from './version'
 
 import { parseDocument } from './parser'
 import { parseToolDocument } from './toolParser'

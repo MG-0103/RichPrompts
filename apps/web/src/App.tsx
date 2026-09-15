@@ -18,10 +18,12 @@ import { LLMReviewPanel } from './components/LLMReviewPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { PreviewPane } from './components/PreviewPane'
 import { TestsPanel } from './components/TestsPanel'
+import { HistoryPanel } from './components/HistoryPanel'
 import { useRegistry } from './hooks/useRegistry'
 import { useScore } from './hooks/useScore'
 import { useLLMReview } from './hooks/useLLMReview'
 import { useTests } from './hooks/useTests'
+import { useVersioning } from './hooks/useVersioning'
 import { loadConfig, resetConfig, saveConfig } from './persistence/config'
 import { loadTestingConfig, saveTestingConfig } from './persistence/testConfig'
 import { addPin, loadPins, removePin, type RegistryPin } from './persistence/pins'
@@ -30,7 +32,7 @@ import { sampleRegistryTools, sampleRegistrySkills } from '@richprompt/core'
 import type { RuleConfig } from '@richprompt/core'
 import './App.css'
 
-type BottomTab = 'problems' | 'registry' | 'review' | 'tests' | 'settings'
+type BottomTab = 'problems' | 'registry' | 'review' | 'tests' | 'history' | 'settings'
 
 const FIXTURES: Record<DocType, string> = {
   prompt: badPrompt,
@@ -99,6 +101,27 @@ function App() {
   const baselineFor = selectedPin
     ? { prompt: selectedPin.prompt, tools: selectedPin.tools, skills: selectedPin.skills }
     : undefined
+  const versioning = useVersioning(sources)
+
+  // Cmd+S / Ctrl+S opens the commit prompt for the currently-focused doc.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        const label = window.prompt(`Label for this commit of "${docType}"?`, '')
+        if (label && label.trim()) {
+          versioning.commit(docType, label)
+          setBottomTab('history')
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [docType, versioning])
+
+  const restoreVersion = (content: string) => {
+    setSources(s => ({ ...s, [docType]: content }))
+  }
   const [previewOpen, setPreviewOpen] = useState<boolean>(() => {
     try { return localStorage.getItem('richprompt.preview.open') !== '0' } catch { return true }
   })
@@ -315,6 +338,13 @@ function App() {
             Tests <span className="btab-count">{tests.tests.length}</span>
           </button>
           <button
+            className={`btab ${bottomTab === 'history' ? 'active' : ''}`}
+            onClick={() => setBottomTab('history')}
+            title="Commit + auto-save history for this doc"
+          >
+            History <span className="btab-count">{(versioning.versions[docType] ?? []).filter(v => v.kind === 'commit').length}</span>
+          </button>
+          <button
             className={`btab ${bottomTab === 'settings' ? 'active' : ''}`}
             onClick={() => setBottomTab('settings')}
           >
@@ -375,6 +405,17 @@ function App() {
               onRemove={tests.remove}
               onReset={tests.reset}
               onClearCache={tests.clearCache}
+            />
+          )}
+          {bottomTab === 'history' && (
+            <HistoryPanel
+              docType={docType}
+              currentContent={source}
+              versions={versioning.versions[docType] ?? []}
+              onCommit={label => versioning.commit(docType, label)}
+              onRename={(id, label) => versioning.rename(docType, id, label)}
+              onDelete={id => versioning.remove(docType, id)}
+              onRestore={restoreVersion}
             />
           )}
           {bottomTab === 'settings' && (

@@ -12,6 +12,8 @@
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "@richprompt/core": "^0.0.0",
+    "@types/diff": "^7.0.2",
+    "diff": "^9.0.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-markdown": "^10.1.0",
