@@ -1,6 +1,8 @@
-import React, { useState } from 'react'
-import type { TestCase, TestResult } from '@richprompt/core'
+import React, { useEffect, useState } from 'react'
+import type { TestCase, TestResult, RolloutOutcome } from '@richprompt/core'
 import type { SidecarStatus } from '../hooks/useTests'
+import type { CallTarget } from '../testing/registry'
+import type { TestingConfig } from '../persistence/testConfig'
 
 type Props = {
   tests: TestCase[]
@@ -10,20 +12,35 @@ type Props = {
   sidecar: SidecarStatus
   useMock: boolean
   onToggleMock: (v: boolean) => void
+  runnerConfig: TestingConfig
+  onRunnerConfig: (c: TestingConfig) => void
+  targets: CallTarget[]
   onRunAll: () => void
   onRunOne: (id: string) => void
   onCancel: () => void
   onUpsert: (tc: TestCase) => void
   onRemove: (id: string) => void
   onReset: () => void
+  onClearCache: () => void
 }
 
 export function TestsPanel({
   tests, results, loading, error, sidecar, useMock, onToggleMock,
-  onRunAll, onRunOne, onCancel, onUpsert, onRemove, onReset,
+  runnerConfig, onRunnerConfig, targets,
+  onRunAll, onRunOne, onCancel, onUpsert, onRemove, onReset, onClearCache,
 }: Props) {
-  const realReady = sidecar.state === 'up' && sidecar.real?.available === true
   const [editing, setEditing] = useState<TestCase | null>(null)
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  const [showConfig, setShowConfig] = useState(false)
+  const realReady = sidecar.state === 'up' && sidecar.real?.available === true
+
+  const toggleExpand = (id: string) =>
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
 
   return (
     <div className="tests-panel">
@@ -42,8 +59,12 @@ export function TestsPanel({
           />
           <span>real runner {realReady ? '' : '(unavailable)'}</span>
         </label>
+        <button className="chip-btn" onClick={() => setShowConfig(v => !v)}>
+          {`${runnerConfig.rollouts}× · t=${runnerConfig.temperature} · ${runnerConfig.model}`}
+        </button>
         <div className="tests-actions">
           <button className="rescan-btn" onClick={() => setEditing(BLANK_TEST())}>+ Add</button>
+          <button className="rescan-btn" onClick={onClearCache} title="Force fresh runs">Clear cache</button>
           <button className="rescan-btn" onClick={onReset} title="Restore seed tests">Reset</button>
           {loading ? (
             <button className="rescan-btn danger" onClick={onCancel}>Cancel</button>
@@ -53,6 +74,14 @@ export function TestsPanel({
         </div>
       </div>
 
+      {showConfig && (
+        <ConfigStrip
+          config={runnerConfig}
+          onChange={onRunnerConfig}
+          onClose={() => setShowConfig(false)}
+        />
+      )}
+      {loading && <RunningBanner useMock={useMock} count={tests.length} />}
       {error && <div className="tests-error">{error}</div>}
       {sidecar.state === 'down' && !error && (
         <div className="tests-hint">
@@ -65,13 +94,15 @@ export function TestsPanel({
       <table className="tests-table">
         <thead>
           <tr>
+            <th></th>
             <th>id</th>
             <th>query</th>
             <th>expect</th>
             <th title="Fraction of rollouts matching expect.">pass</th>
-            <th title="Fraction of rollouts landing on the modal choice (whatever it was). High concentration + low pass = confidently wrong.">conc</th>
-            <th title="Modal call across rollouts. Blank means all rollouts errored or tied.">modal</th>
+            <th title="Fraction of rollouts landing on the modal choice.">conc</th>
+            <th title="What the model picked most often.">modal</th>
             <th>steps</th>
+            <th title="p50 latency across rollouts, ms.">lat</th>
             <th title="0.7 * passRate + 0.3 * confidence-proxy.">score</th>
             <th></th>
           </tr>
@@ -79,29 +110,43 @@ export function TestsPanel({
         <tbody>
           {tests.map(t => {
             const r = results[t.id]
+            const isOpen = expanded.has(t.id)
             return (
-              <tr key={t.id}>
-                <td className="t-id">
-                  {t.id}
-                  {r?.cached && <span className="cached-dot" title="From cache">•</span>}
-                </td>
-                <td className="t-q">{t.query}</td>
-                <td className="t-exp">{fmtExpect(t)}</td>
-                <td>{r ? <PassBar rate={r.passRate} /> : <span className="dim">—</span>}</td>
-                <td className="mono">{r ? (r.concentration * 100).toFixed(0) + '%' : <span className="dim">—</span>}</td>
-                <td className="t-exp">{r ? fmtModal(r.modalCalled, t) : <span className="dim">—</span>}</td>
-                <td className="mono">{r ? r.meanSteps.toFixed(1) : <span className="dim">—</span>}</td>
-                <td className="mono">{r ? (r.routingScore * 100).toFixed(0) : <span className="dim">—</span>}</td>
-                <td className="t-actions">
-                  <button className="link-btn" onClick={() => onRunOne(t.id)}>run</button>
-                  <button className="link-btn" onClick={() => setEditing({ ...t })}>edit</button>
-                  <button className="link-btn danger" onClick={() => onRemove(t.id)}>del</button>
-                </td>
-              </tr>
+              <React.Fragment key={t.id}>
+                <tr onClick={() => r && toggleExpand(t.id)} className={r ? 'clickable' : ''}>
+                  <td className="expand-cell">
+                    {r ? <span className={`chev ${isOpen ? 'open' : ''}`}>▸</span> : ''}
+                  </td>
+                  <td className="t-id">
+                    {t.id}
+                    {r?.cached && <span className="cached-dot" title="From cache">•</span>}
+                  </td>
+                  <td className="t-q">{t.query}</td>
+                  <td className="t-exp">{fmtExpect(t)}</td>
+                  <td>{r ? <PassBar rate={r.passRate} /> : <span className="dim">—</span>}</td>
+                  <td className="mono">{r ? (r.concentration * 100).toFixed(0) + '%' : <span className="dim">—</span>}</td>
+                  <td className="t-exp">{r ? fmtModal(r.modalCalled, t) : <span className="dim">—</span>}</td>
+                  <td className="mono">{r ? r.meanSteps.toFixed(1) : <span className="dim">—</span>}</td>
+                  <td className="mono">{r ? Math.round(r.latencyP50) + 'ms' : <span className="dim">—</span>}</td>
+                  <td className="mono">{r ? (r.routingScore * 100).toFixed(0) : <span className="dim">—</span>}</td>
+                  <td className="t-actions" onClick={e => e.stopPropagation()}>
+                    <button className="link-btn" onClick={() => onRunOne(t.id)}>run</button>
+                    <button className="link-btn" onClick={() => setEditing({ ...t })}>edit</button>
+                    <button className="link-btn danger" onClick={() => onRemove(t.id)}>del</button>
+                  </td>
+                </tr>
+                {isOpen && r && (
+                  <tr className="rollout-row">
+                    <td colSpan={11}>
+                      <RolloutTable rollouts={r.rollouts} test={t} />
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
             )
           })}
           {tests.length === 0 && (
-            <tr><td colSpan={9} className="tests-empty">No tests yet. Click "+ Add" to create one.</td></tr>
+            <tr><td colSpan={11} className="tests-empty">No tests yet. Click "+ Add" to create one.</td></tr>
           )}
         </tbody>
       </table>
@@ -110,12 +155,117 @@ export function TestsPanel({
         <TestEditor
           initial={editing}
           existingIds={new Set(tests.map(t => t.id).filter(id => id !== editing.id))}
+          targets={targets}
           onSave={tc => { onUpsert(tc); setEditing(null) }}
           onCancel={() => setEditing(null)}
         />
       )}
     </div>
   )
+}
+
+function ConfigStrip({
+  config,
+  onChange,
+  onClose,
+}: {
+  config: TestingConfig
+  onChange: (c: TestingConfig) => void
+  onClose: () => void
+}) {
+  const patch = (p: Partial<TestingConfig>) => onChange({ ...config, ...p })
+  return (
+    <div className="config-strip">
+      <label>
+        <span>rollouts</span>
+        <input
+          type="range" min={1} max={10} step={1}
+          value={config.rollouts}
+          onChange={e => patch({ rollouts: parseInt(e.target.value, 10) })}
+        />
+        <span className="mono">{config.rollouts}</span>
+      </label>
+      <label>
+        <span>temperature</span>
+        <input
+          type="range" min={0} max={1.5} step={0.1}
+          value={config.temperature}
+          onChange={e => patch({ temperature: parseFloat(e.target.value) })}
+        />
+        <span className="mono">{config.temperature.toFixed(1)}</span>
+      </label>
+      <label>
+        <span>model</span>
+        <input
+          type="text"
+          value={config.model}
+          onChange={e => patch({ model: e.target.value })}
+          placeholder="gemini-2.5-flash"
+        />
+      </label>
+      <button className="link-btn" onClick={onClose}>close</button>
+    </div>
+  )
+}
+
+function RunningBanner({ useMock, count }: { useMock: boolean; count: number }) {
+  const [elapsed, setElapsed] = useState(0)
+  useEffect(() => {
+    setElapsed(0)
+    const started = performance.now()
+    const id = setInterval(() => setElapsed(performance.now() - started), 200)
+    return () => clearInterval(id)
+  }, [])
+  return (
+    <div className="running-banner">
+      <span className="spinner" /> Running {count} test{count === 1 ? '' : 's'}
+      {' '}({useMock ? 'mock' : 'real'}) · {(elapsed / 1000).toFixed(1)}s
+    </div>
+  )
+}
+
+function RolloutTable({
+  rollouts,
+  test,
+}: {
+  rollouts: RolloutOutcome[]
+  test: TestCase
+}) {
+  return (
+    <table className="rollout-table">
+      <thead>
+        <tr><th>#</th><th>called</th><th>latency</th><th>steps</th><th>notes</th></tr>
+      </thead>
+      <tbody>
+        {rollouts.map((r, i) => {
+          const passed = judgeOne(test, r)
+          return (
+            <tr key={i} className={passed ? 'rp-pass' : 'rp-fail'}>
+              <td className="mono">{i + 1}</td>
+              <td className="mono">{fmtCall(r.called)}</td>
+              <td className="mono">{Math.round(r.latencyMs)}ms</td>
+              <td className="mono">{r.steps}</td>
+              <td>{r.error ? <span className="err">{r.error}</span> : (passed ? '' : 'mismatch')}</td>
+            </tr>
+          )
+        })}
+      </tbody>
+    </table>
+  )
+}
+
+function judgeOne(test: TestCase, r: RolloutOutcome): boolean {
+  if (r.error || !r.called) return false
+  const c = r.called
+  const e = test.expect
+  if (e.kind === 'none') return c.kind === 'none'
+  return c.kind === e.kind && c.name === e.name
+}
+
+function fmtCall(c: RolloutOutcome['called']): string {
+  if (!c) return 'error'
+  if (c.kind === 'none') return '∅ no call'
+  return `${c.kind}:${c.name}`
 }
 
 function sidecarReason(status: SidecarStatus): string | undefined {
@@ -178,11 +328,13 @@ function BLANK_TEST(): TestCase {
 function TestEditor({
   initial,
   existingIds,
+  targets,
   onSave,
   onCancel,
 }: {
   initial: TestCase
   existingIds: Set<string>
+  targets: CallTarget[]
   onSave: (t: TestCase) => void
   onCancel: () => void
 }) {
@@ -193,6 +345,11 @@ function TestEditor({
     initial.expect.kind === 'none' ? '' : initial.expect.name,
   )
   const [notes, setNotes] = useState(initial.notes ?? '')
+
+  const availableNames = targets
+    .filter(t => t.kind === expectKind)
+    .map(t => t.name)
+  const nameInRegistry = availableNames.includes(expectName)
 
   const idError = !id.trim()
     ? 'id required'
@@ -207,7 +364,7 @@ function TestEditor({
     <div className="test-editor-overlay" onClick={onCancel}>
       <div className="test-editor" onClick={e => e.stopPropagation()}>
         <div className="editor-title">
-          {initial.query || initial.expect.kind !== 'tool' || initial.expect.name ? 'Edit test' : 'New test'}
+          {initial.query ? 'Edit test' : 'New test'}
         </div>
         <label className="ef">
           <span>id</span>
@@ -230,9 +387,20 @@ function TestEditor({
           </label>
           {expectKind !== 'none' && (
             <label className="ef">
-              <span>name</span>
-              <input value={expectName} onChange={e => setExpectName(e.target.value)} placeholder="e.g. get_weather" />
+              <span>name{!nameInRegistry && expectName ? ' ⚠︎' : ''}</span>
+              <input
+                list={`ef-names-${expectKind}`}
+                value={expectName}
+                onChange={e => setExpectName(e.target.value)}
+                placeholder={availableNames[0] ?? `e.g. get_weather`}
+              />
+              <datalist id={`ef-names-${expectKind}`}>
+                {availableNames.map(n => <option key={n} value={n} />)}
+              </datalist>
               {nameError && <em>{nameError}</em>}
+              {!nameError && expectName && !nameInRegistry && (
+                <em className="warn">not in current registry — the model may not know about it</em>
+              )}
             </label>
           )}
         </div>

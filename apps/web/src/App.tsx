@@ -23,6 +23,8 @@ import { useScore } from './hooks/useScore'
 import { useLLMReview } from './hooks/useLLMReview'
 import { useTests } from './hooks/useTests'
 import { loadConfig, resetConfig, saveConfig } from './persistence/config'
+import { loadTestingConfig, saveTestingConfig } from './persistence/testConfig'
+import { callTargets } from './testing/registry'
 import { sampleRegistryTools, sampleRegistrySkills } from '@richprompt/core'
 import type { RuleConfig } from '@richprompt/core'
 import './App.css'
@@ -62,6 +64,15 @@ function App() {
     setUseMock(v)
     try { localStorage.setItem('richprompt.tests.mock', v ? '1' : '0') } catch { /* ignore */ }
   }
+  const [runnerConfig, setRunnerConfig] = useState(() => loadTestingConfig())
+  const updateRunnerConfig = (c: typeof runnerConfig) => {
+    setRunnerConfig(c)
+    saveTestingConfig(c)
+  }
+  const targets = useMemo(
+    () => callTargets(sampleRegistryTools, sampleRegistrySkills),
+    [],
+  )
   const [previewOpen, setPreviewOpen] = useState<boolean>(() => {
     try { return localStorage.getItem('richprompt.preview.open') !== '0' } catch { return true }
   })
@@ -310,23 +321,27 @@ function App() {
               sidecar={tests.sidecar}
               useMock={useMock}
               onToggleMock={toggleMock}
+              runnerConfig={runnerConfig}
+              onRunnerConfig={updateRunnerConfig}
+              targets={targets}
               onRunAll={() => tests.run({
                 prompt: sources.prompt,
                 tools: sampleRegistryTools,
                 skills: sampleRegistrySkills,
-                config: { mock: useMock, rollouts: 5, temperature: 0.7 },
+                config: { mock: useMock, ...runnerConfig },
               })}
               onRunOne={id => tests.run({
                 prompt: sources.prompt,
                 tools: sampleRegistryTools,
                 skills: sampleRegistrySkills,
                 onlyIds: [id],
-                config: { mock: useMock, rollouts: 5, temperature: 0.7 },
+                config: { mock: useMock, ...runnerConfig },
               })}
               onCancel={tests.cancel}
               onUpsert={tests.upsert}
               onRemove={tests.remove}
               onReset={tests.reset}
+              onClearCache={tests.clearCache}
             />
           )}
           {bottomTab === 'settings' && (

@@ -25,6 +25,16 @@ export type Health = {
   real?: { available: boolean; reason?: string | null }
 }
 
+export async function clearCache(): Promise<{ cleared: number } | null> {
+  try {
+    const res = await fetch(`${BASE}/cache`, { method: 'DELETE' })
+    if (!res.ok) return null
+    return await res.json()
+  } catch {
+    return null
+  }
+}
+
 export async function checkHealth(signal?: AbortSignal): Promise<Health> {
   try {
     const res = await fetch(`${BASE}/health`, { signal })

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TestCase, TestResult, TestRunRequest } from '@richprompt/core'
 import { loadTests, resetTests, saveTests } from '../persistence/tests'
-import { checkHealth, runTests } from '../testing/client'
+import { checkHealth, clearCache as clearCacheReq, runTests } from '../testing/client'
 
 export type SidecarStatus =
   | { state: 'unknown' }
@@ -95,7 +95,16 @@ export function useTests() {
     setLoading(false)
   }, [])
 
-  return { tests, results, loading, error, sidecar, run, cancel, upsert, remove, reset }
+  const clearCache = useCallback(async () => {
+    await clearCacheReq()
+    setResults({})
+    refreshHealth()
+  }, [refreshHealth])
+
+  return {
+    tests, results, loading, error, sidecar,
+    run, cancel, upsert, remove, reset, clearCache,
+  }
 }
 
 function mergeById(list: TestCase[], next: TestCase): TestCase[] {

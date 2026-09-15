@@ -41,8 +41,22 @@ sidecar owns anything model-touching. Contract in
   hit/miss so partial re-runs are free. Backlog: reranking-probe
   confidence signal is still open (phase 12.x), as is a real ADK
   `LlmAgent` lift for trajectory events (phase 12.y).
-- **13 — Tests tab authoring/results UX:** editor polish, dropdowns
-  populated from live registry (no typos), SSE progress.
+- **13 — Tests tab authoring/results UX:** SHIPPED.
+  Test editor now offers a registry-derived datalist for
+  `expect.name` (skill names sanitized the same way the sidecar
+  does, so the UI-visible name matches the routed name). A warn
+  hint appears when the entered name isn't in the current
+  registry. Rows expand to reveal per-rollout details (called
+  target, latency, error). Config strip (rollouts, temperature,
+  model) with per-workspace persistence; the current settings
+  live in a chip in the header for at-a-glance status.
+  Latency-p50 column added. "Clear cache" button in the header.
+  A running banner with elapsed time replaces the silent
+  loading state.
+
+  Deferred to phase 16: real SSE progress (per-test streaming
+  updates instead of the current single-shot POST) — the running
+  banner is honest that we don't know per-test progress today.
 - **14 — Names-only ablation:** `strip: 'descriptions'` flag on the
   run; per-test `descriptionDelta`.
 - **15 — Snapshot-diff runs:** run same suite against two snapshots,

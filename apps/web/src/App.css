@@ -516,6 +516,101 @@ body.splitter-dragging .preview-col { pointer-events: none; }
 }
 .modal-match { color: #6c6; font-family: ui-monospace, monospace; }
 .modal-miss  { color: #e77; font-family: ui-monospace, monospace; }
+
+.tests-table tr.clickable { cursor: pointer; }
+.tests-table .expand-cell { width: 18px; text-align: center; color: #666; }
+.chev { display: inline-block; transition: transform 0.12s; }
+.chev.open { transform: rotate(90deg); }
+
+.rollout-row td { padding: 0 8px 8px 32px; background: #1c1c1c; }
+.rollout-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 11px;
+  margin: 4px 0 8px;
+  background: #191919;
+}
+.rollout-table th {
+  text-align: left;
+  padding: 4px 8px;
+  color: #666;
+  font-weight: 500;
+  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.5px;
+  border-bottom: 1px solid #262626;
+}
+.rollout-table td {
+  padding: 3px 8px;
+  border-bottom: 1px solid #212121;
+}
+.rollout-table tr.rp-pass td:nth-child(2) { color: #6c6; }
+.rollout-table tr.rp-fail td:nth-child(2) { color: #e77; }
+.rollout-table .err { color: #f88; font-family: ui-monospace, monospace; }
+
+.chip-btn {
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  padding: 3px 10px;
+  background: #262626;
+  color: #dc9;
+  border: 1px solid #444;
+  border-radius: 3px;
+  cursor: pointer;
+}
+.chip-btn:hover { background: #303030; }
+
+.config-strip {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 8px 16px;
+  background: #202020;
+  border-bottom: 1px solid #2a2a2a;
+  font-size: 12px;
+}
+.config-strip label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #bbb;
+}
+.config-strip label > span:first-child { color: #888; font-size: 11px; }
+.config-strip input[type="range"] { width: 100px; }
+.config-strip input[type="text"] {
+  background: #262626;
+  border: 1px solid #333;
+  border-radius: 3px;
+  color: #ddd;
+  padding: 3px 6px;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  width: 160px;
+}
+
+.running-banner {
+  margin: 6px 16px;
+  padding: 8px 12px;
+  background: #1e2a35;
+  border: 1px solid #34506e;
+  border-radius: 3px;
+  color: #9bd;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #34506e;
+  border-top-color: #9bd;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.ef em.warn { color: #dc9; }
 .mono { font-family: ui-monospace, monospace; }
 .dim { color: #555; }
 .tests-empty { padding: 14px 16px; color: #666; text-align: center; }
