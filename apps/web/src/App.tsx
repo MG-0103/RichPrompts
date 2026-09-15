@@ -16,6 +16,7 @@ import { RegistryPanel } from './components/RegistryPanel'
 import { ScoreBadge } from './components/ScoreBadge'
 import { LLMReviewPanel } from './components/LLMReviewPanel'
 import { SettingsPanel } from './components/SettingsPanel'
+import { PreviewPane } from './components/PreviewPane'
 import { useRegistry } from './hooks/useRegistry'
 import { useScore } from './hooks/useScore'
 import { useLLMReview } from './hooks/useLLMReview'
@@ -50,6 +51,16 @@ function App() {
   const { findings: registryFindings, rescan } = useRegistry()
   const llm = useLLMReview()
   const [bottomTab, setBottomTab] = useState<BottomTab>('problems')
+  const [previewOpen, setPreviewOpen] = useState<boolean>(() => {
+    try { return localStorage.getItem('richprompt.preview.open') !== '0' } catch { return true }
+  })
+  const togglePreview = () => {
+    setPreviewOpen(v => {
+      const next = !v
+      try { localStorage.setItem('richprompt.preview.open', next ? '1' : '0') } catch { /* ignore */ }
+      return next
+    })
+  }
 
   const editorRef = useRef<editor.IStandaloneCodeEditor | null>(null)
   const monacoRef = useRef<Monaco | null>(null)
@@ -115,17 +126,31 @@ function App() {
           ))}
         </div>
         <ScoreBadge breakdown={breakdown} history={history} />
+        <button
+          className="preview-toggle"
+          onClick={togglePreview}
+          title={previewOpen ? 'Hide preview' : 'Show preview'}
+        >
+          {previewOpen ? 'Hide preview' : 'Show preview'}
+        </button>
       </header>
-      <div className="editor-pane">
-        <Editor
-          height="100%"
-          language={language}
-          path={`fixture.${docType}.${language === 'json' ? 'json' : 'md'}`}
-          value={source}
-          onChange={v => setSources(s => ({ ...s, [docType]: v ?? '' }))}
-          onMount={handleMount}
-          options={{ minimap: { enabled: false }, wordWrap: 'on', fontSize: 14 }}
-        />
+      <div className={`editor-pane ${previewOpen ? 'split' : ''}`}>
+        <div className="editor-col">
+          <Editor
+            height="100%"
+            language={language}
+            path={`fixture.${docType}.${language === 'json' ? 'json' : 'md'}`}
+            value={source}
+            onChange={v => setSources(s => ({ ...s, [docType]: v ?? '' }))}
+            onMount={handleMount}
+            options={{ minimap: { enabled: false }, wordWrap: 'on', fontSize: 14 }}
+          />
+        </div>
+        {previewOpen && (
+          <div className="preview-col">
+            <PreviewPane source={source} docType={docType} />
+          </div>
+        )}
       </div>
       <div className="bottom">
         <div className="bottom-tabs">
