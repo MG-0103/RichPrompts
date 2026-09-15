@@ -508,6 +508,14 @@ body.splitter-dragging .preview-col { pointer-events: none; }
 .t-q { color: #ccc; max-width: 320px; overflow: hidden; text-overflow: ellipsis; }
 .t-exp { font-family: ui-monospace, monospace; color: #d90; white-space: nowrap; }
 .t-actions { text-align: right; white-space: nowrap; }
+.cached-dot {
+  color: #6ab;
+  margin-left: 4px;
+  font-size: 14px;
+  line-height: 1;
+}
+.modal-match { color: #6c6; font-family: ui-monospace, monospace; }
+.modal-miss  { color: #e77; font-family: ui-monospace, monospace; }
 .mono { font-family: ui-monospace, monospace; }
 .dim { color: #555; }
 .tests-empty { padding: 14px 16px; color: #666; text-align: center; }

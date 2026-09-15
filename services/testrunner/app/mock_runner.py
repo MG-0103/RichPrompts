@@ -1,11 +1,8 @@
-"""Deterministic mock runner for Phase 10.
+"""Deterministic mock runner.
 
-Returns believable-looking results without calling any LLM. The scoring
-model here is intentionally naive: if the expected target's name appears
-verbatim in the query, we say the router picked it with high confidence.
-Otherwise we return a randomized-but-seeded miss. This is enough to wire
-up the whole UI and prove the request/response contract before Phase 11
-brings the real ADK.
+No LLM calls. Rollout outcomes are seeded by (test, prompt, rollout)
+so re-runs match. Uses the same aggregation as the real runner, so
+the UI never has to know which one produced a result.
 """
 
 from __future__ import annotations
@@ -14,13 +11,12 @@ import hashlib
 import random
 import re
 import time
-from statistics import median
 
+from .aggregate import aggregate
 from .schemas import (
     CalledTarget,
     RolloutOutcome,
     TestCase,
-    TestResult,
     TestRunConfig,
     TestRunRequest,
     TestRunResponse,
@@ -56,77 +52,39 @@ def _run_one(
     expected_kind = test.expect.kind
     expected_name = getattr(test.expect, "name", None)
     base = _score_query(test.query, expected_name)
-    noise = (rng.random() - 0.5) * (1.0 - min(config.temperature, 1.0)) * 0.1
+    # More temperature → more noise; keeps concentration signal alive.
+    noise = (rng.random() - 0.5) * min(config.temperature, 1.5) * 0.5
     pick_prob = min(0.99, max(0.02, base + noise))
 
     if rng.random() < pick_prob and expected_kind != "none":
         called = CalledTarget(kind=expected_kind, name=expected_name)
-        logprob = -0.05 - (1.0 - pick_prob) * 2.0
     elif expected_kind == "none":
         called = CalledTarget(kind="none")
-        logprob = -0.4
     else:
         called = CalledTarget(kind="none")
-        logprob = -1.8
 
     return RolloutOutcome(
         called=called,
         args={},
         latencyMs=latency,
         steps=steps,
-        logprob=logprob,
+        logprob=None,
     )
-
-
-def _judge_pass(test: TestCase, outcome: RolloutOutcome) -> bool:
-    if outcome.error or outcome.called is None:
-        return False
-    called = outcome.called
-    exp = test.expect
-    if exp.kind == "none":
-        return called.kind == "none"
-    if called.kind != exp.kind or called.name != getattr(exp, "name", None):
-        return False
-    if test.mustNotCall and called.name in test.mustNotCall:
-        return False
-    return True
 
 
 def run_mock(req: TestRunRequest) -> TestRunResponse:
     started = time.perf_counter()
     config = req.config or TestRunConfig()
-    rollouts = max(1, config.rollouts)
-    results: list[TestResult] = []
+    rollouts_n = max(1, config.rollouts)
 
-    for test in req.testCases:
-        outcomes = [_run_one(test, req.prompt, i, config) for i in range(rollouts)]
-        passes = [_judge_pass(test, o) for o in outcomes]
-        pass_rate = sum(passes) / len(passes)
-        logprobs = [o.logprob for o in outcomes if o.logprob is not None]
-        mean_logprob = sum(logprobs) / len(logprobs) if logprobs else None
-        mean_steps = sum(o.steps for o in outcomes) / len(outcomes)
-        latency_p50 = median(o.latencyMs for o in outcomes)
-        # RoutingScore = 0.7 * passRate + 0.3 * normalize(meanLogprob)
-        # Rough normalization: exp(mean_logprob) maps to [0,1].
-        conf = (2.71828 ** mean_logprob) if mean_logprob is not None else pass_rate
-        routing_score = 0.7 * pass_rate + 0.3 * max(0.0, min(1.0, conf))
-
-        results.append(
-            TestResult(
-                testId=test.id,
-                passRate=pass_rate,
-                meanLogprob=mean_logprob,
-                meanSteps=mean_steps,
-                latencyP50=latency_p50,
-                routingScore=routing_score,
-                rollouts=outcomes,
-                mock=True,
-            )
-        )
+    results = []
+    for tc in req.testCases:
+        outcomes = [_run_one(tc, req.prompt, i, config) for i in range(rollouts_n)]
+        results.append(aggregate(tc, outcomes, mock=True))
 
     duration = (time.perf_counter() - started) * 1000
     return TestRunResponse(
         results=results,
         durationMs=duration,
-        sidecarVersion="0.1.0-mock",
+        sidecarVersion="0.3.0-mock",
     )

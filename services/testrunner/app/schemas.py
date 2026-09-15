@@ -60,11 +60,14 @@ class RolloutOutcome(BaseModel):
 class TestResult(BaseModel):
     testId: str
     passRate: float
+    concentration: float
+    modalCalled: CalledTarget | None = None
     meanLogprob: float | None = None
     meanSteps: float
     latencyP50: float
     routingScore: float
     rollouts: list[RolloutOutcome]
+    cached: bool = False
     mock: bool = False
 
 

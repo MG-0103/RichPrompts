@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import React, { useState } from 'react'
 import type { TestCase, TestResult } from '@richprompt/core'
 import type { SidecarStatus } from '../hooks/useTests'
 
@@ -68,10 +68,11 @@ export function TestsPanel({
             <th>id</th>
             <th>query</th>
             <th>expect</th>
-            <th>pass</th>
-            <th>logp</th>
+            <th title="Fraction of rollouts matching expect.">pass</th>
+            <th title="Fraction of rollouts landing on the modal choice (whatever it was). High concentration + low pass = confidently wrong.">conc</th>
+            <th title="Modal call across rollouts. Blank means all rollouts errored or tied.">modal</th>
             <th>steps</th>
-            <th>score</th>
+            <th title="0.7 * passRate + 0.3 * confidence-proxy.">score</th>
             <th></th>
           </tr>
         </thead>
@@ -80,11 +81,15 @@ export function TestsPanel({
             const r = results[t.id]
             return (
               <tr key={t.id}>
-                <td className="t-id">{t.id}</td>
+                <td className="t-id">
+                  {t.id}
+                  {r?.cached && <span className="cached-dot" title="From cache">•</span>}
+                </td>
                 <td className="t-q">{t.query}</td>
                 <td className="t-exp">{fmtExpect(t)}</td>
                 <td>{r ? <PassBar rate={r.passRate} /> : <span className="dim">—</span>}</td>
-                <td className="mono">{r?.meanLogprob != null ? r.meanLogprob.toFixed(2) : <span className="dim">—</span>}</td>
+                <td className="mono">{r ? (r.concentration * 100).toFixed(0) + '%' : <span className="dim">—</span>}</td>
+                <td className="t-exp">{r ? fmtModal(r.modalCalled, t) : <span className="dim">—</span>}</td>
                 <td className="mono">{r ? r.meanSteps.toFixed(1) : <span className="dim">—</span>}</td>
                 <td className="mono">{r ? (r.routingScore * 100).toFixed(0) : <span className="dim">—</span>}</td>
                 <td className="t-actions">
@@ -96,7 +101,7 @@ export function TestsPanel({
             )
           })}
           {tests.length === 0 && (
-            <tr><td colSpan={8} className="tests-empty">No tests yet. Click "+ Add" to create one.</td></tr>
+            <tr><td colSpan={9} className="tests-empty">No tests yet. Click "+ Add" to create one.</td></tr>
           )}
         </tbody>
       </table>
@@ -147,6 +152,19 @@ function PassBar({ rate }: { rate: number }) {
 function fmtExpect(t: TestCase): string {
   if (t.expect.kind === 'none') return '∅ no call'
   return `${t.expect.kind}:${t.expect.name}`
+}
+
+function fmtModal(
+  called: TestResult['modalCalled'],
+  test: TestCase,
+): React.ReactNode {
+  if (!called) return <span className="dim">—</span>
+  const label = called.kind === 'none' ? '∅ no call' : `${called.kind}:${called.name}`
+  const expected = test.expect
+  const match = expected.kind === 'none'
+    ? called.kind === 'none'
+    : called.kind === expected.kind && called.name === expected.name
+  return <span className={match ? 'modal-match' : 'modal-miss'}>{label}</span>
 }
 
 function BLANK_TEST(): TestCase {

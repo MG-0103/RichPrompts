@@ -37,11 +37,22 @@ export interface RolloutOutcome {
 export interface TestResult {
   testId: string
   passRate: number
+  /** Fraction of rollouts that landed on the modal call. High
+   *  concentration + low pass rate = confidently wrong. */
+  concentration: number
+  /** What the model picked most often, whether or not it matched
+   *  the expectation. `null` when the model tied across rollouts
+   *  or produced only errors. */
+  modalCalled: RolloutOutcome['called']
+  /** Not populated on Gemini function-call responses yet — kept
+   *  optional for phase-12.x reranking-probe experiments. */
   meanLogprob?: number
   meanSteps: number
   latencyP50: number
   routingScore: number
   rollouts: RolloutOutcome[]
+  /** Was this served from cache? */
+  cached?: boolean
   mock?: boolean
 }
 

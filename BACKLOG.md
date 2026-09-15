@@ -32,8 +32,15 @@ sidecar owns anything model-touching. Contract in
   single-file change in phase 12.x when trajectory events pay off.
   `temperature=0`. Logprobs not surfaced by Gemini for function
   calls yet — deferred to phase 12.
-- **12 — N-rollout pass rate + logprob:** aggregate over N=5 at
-  temp=0.7. Cache by content hash so re-runs are free.
+- **12 — N-rollout pass rate + concentration:** SHIPPED.
+  N=5 parallel rollouts at temp=0.7 via ThreadPoolExecutor. Gemini
+  doesn't yield logprobs on function calls, so confidence comes
+  from **concentration** = fraction of rollouts on the modal choice
+  (with a mild tie penalty). Cache keyed by sha256 over
+  {prompt, sorted tools, sorted skills, test, config}; per-test
+  hit/miss so partial re-runs are free. Backlog: reranking-probe
+  confidence signal is still open (phase 12.x), as is a real ADK
+  `LlmAgent` lift for trajectory events (phase 12.y).
 - **13 — Tests tab authoring/results UX:** editor polish, dropdowns
   populated from live registry (no typos), SSE progress.
 - **14 — Names-only ablation:** `strip: 'descriptions'` flag on the

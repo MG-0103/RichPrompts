@@ -1,16 +1,19 @@
-"""Phase 11 runner: single rollout per test against a real Gemini model.
+"""Phase 12 runner: N rollouts per test against a real Gemini model.
 
-Builds a `google.genai` `FunctionDeclaration` per tool JSON and per skill
-frontmatter description. Sends the query with the prompt as
-system_instruction and the declarations as tools. Captures the
-resulting function call (or lack of one), latency, and a step-count
-proxy.
+Builds `google.genai` `FunctionDeclaration`s from tool JSON and skill
+frontmatter, then samples N rollouts at the configured temperature
+in parallel via a thread pool. Aggregation (pass rate, concentration,
+composite score) is shared with the mock runner in `aggregate.py`.
 
-Kept intentionally small: one call per test, `temperature=0`, no
-logprobs plumbing yet. Phase 12 will add N-rollouts, temperature > 0
-sampling, and (where the Gemini API exposes it) `avg_logprobs` on the
-selected tool. Phase 12.x will lift this into a `google.adk.agents.LlmAgent`
-so we get trajectory events for free.
+Gemini doesn't expose logprobs on function-call responses yet, so
+confidence comes from the empirical modal-choice distribution
+(concentration). Phase 12.x may add a separate reranking probe to
+recover a proper logprob-shaped signal; for now, concentration is the
+signal.
+
+Phase 12.y planned lift into `google.adk.agents.LlmAgent` for
+first-class trajectory events. This file is the only one that
+should need to change.
 """
 
 from __future__ import annotations
@@ -19,19 +22,20 @@ import json
 import os
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any
 
+from .aggregate import aggregate
 from .schemas import (
     CalledTarget,
     RolloutOutcome,
     TestCase,
-    TestResult,
     TestRunConfig,
     TestRunRequest,
     TestRunResponse,
 )
 
-try:  # optional dep — mock runner works without it
+try:
     from google import genai
     from google.genai import types as gtypes
 
@@ -41,7 +45,6 @@ except ImportError:  # pragma: no cover
 
 
 def is_available() -> tuple[bool, str | None]:
-    """Return (ready, reason_if_not)."""
     if not GENAI_AVAILABLE:
         return False, "google-genai not installed (pip install '.[genai]')"
     if not os.environ.get("GOOGLE_API_KEY"):
@@ -52,7 +55,7 @@ def is_available() -> tuple[bool, str | None]:
 # ---------- Declaration builders ---------------------------------------
 
 
-def _tool_to_decl(raw_json: str) -> "gtypes.FunctionDeclaration | None":
+def _tool_to_decl(raw_json: str):
     try:
         t = json.loads(raw_json)
     except Exception:
@@ -72,7 +75,7 @@ def _tool_to_decl(raw_json: str) -> "gtypes.FunctionDeclaration | None":
 _SKILL_NAME_SAN = re.compile(r"[^a-zA-Z0-9_]")
 
 
-def _skill_to_decl(raw_md: str, fallback_id: str) -> "gtypes.FunctionDeclaration | None":
+def _skill_to_decl(raw_md: str, fallback_id: str):
     fm_match = re.match(r"^---\s*\n([\s\S]*?)\n---", raw_md)
     if not fm_match:
         return None
@@ -92,8 +95,6 @@ def _skill_to_decl(raw_md: str, fallback_id: str) -> "gtypes.FunctionDeclaration
 
 
 def _sanitize_schema(schema: Any) -> Any:
-    """Gemini's schema wants uppercased primitive types and drops unsupported
-    JSON-Schema keys silently. We do a light pass to be defensive."""
     if not isinstance(schema, dict):
         return schema
     out = {}
@@ -109,7 +110,7 @@ def _sanitize_schema(schema: Any) -> Any:
     return out
 
 
-# ---------- Rollout ----------------------------------------------------
+# ---------- One rollout ------------------------------------------------
 
 
 def _extract_call(
@@ -124,10 +125,9 @@ def _extract_call(
             if fc and getattr(fc, "name", None):
                 if fc.name in skill_names:
                     return CalledTarget(kind="skill", name=fc.name)
-                if fc.name in tool_names:
-                    return CalledTarget(kind="tool", name=fc.name)
-                # Model hallucinated a name that isn't in either set —
-                # still record it as a tool-shaped call for debugging.
+                # Fall through: unknown names are recorded as `tool` for
+                # debugging (aggregate.judge_pass will still mark them as
+                # failing against the expected target).
                 return CalledTarget(kind="tool", name=fc.name)
     return CalledTarget(kind="none")
 
@@ -140,20 +140,6 @@ def _count_steps(resp: Any) -> int:
         parts = getattr(content, "parts", None) or []
         n += len(parts)
     return max(1, n)
-
-
-def _judge_pass(test: TestCase, outcome: RolloutOutcome) -> bool:
-    if outcome.error or outcome.called is None:
-        return False
-    called = outcome.called
-    exp = test.expect
-    if exp.kind == "none":
-        return called.kind == "none"
-    if called.kind != exp.kind or called.name != getattr(exp, "name", None):
-        return False
-    if test.mustNotCall and called.name and called.name in test.mustNotCall:
-        return False
-    return True
 
 
 def _run_one(
@@ -184,7 +170,7 @@ def _run_one(
             steps=_count_steps(resp),
             logprob=None,
         )
-    except Exception as e:  # network / auth / rate limit — surface, don't crash
+    except Exception as e:
         latency = (time.perf_counter() - started) * 1000
         return RolloutOutcome(
             called=None,
@@ -194,7 +180,36 @@ def _run_one(
         )
 
 
-# ---------- Public entry ----------------------------------------------
+# ---------- Batch of rollouts for one test ----------------------------
+
+
+def _run_test(
+    client: Any,
+    model: str,
+    prompt: str,
+    tc: TestCase,
+    tools: Any,
+    tool_names: set[str],
+    skill_names: set[str],
+    rollouts_n: int,
+    temperature: float,
+) -> list[RolloutOutcome]:
+    """N parallel rollouts. Sequential fallback if the pool is too small."""
+    outs: list[RolloutOutcome] = []
+    with ThreadPoolExecutor(max_workers=min(rollouts_n, 8)) as pool:
+        futures = [
+            pool.submit(
+                _run_one, client, model, prompt, tc, tools,
+                tool_names, skill_names, temperature,
+            )
+            for _ in range(rollouts_n)
+        ]
+        for f in as_completed(futures):
+            outs.append(f.result())
+    return outs
+
+
+# ---------- Public entry -----------------------------------------------
 
 
 def run_real(req: TestRunRequest) -> TestRunResponse:
@@ -204,14 +219,14 @@ def run_real(req: TestRunRequest) -> TestRunResponse:
 
     config = req.config or TestRunConfig()
     model = config.model or "gemini-2.5-flash"
-    temperature = 0.0  # phase 11: deterministic single rollout
+    rollouts_n = max(1, config.rollouts)
+    temperature = config.temperature
 
     client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
 
     tool_names: set[str] = set()
     skill_names: set[str] = set()
     decls: list[Any] = []
-
     for t in req.tools:
         d = _tool_to_decl(t.raw)
         if d is not None:
@@ -222,38 +237,20 @@ def run_real(req: TestRunRequest) -> TestRunResponse:
         if d is not None:
             decls.append(d)
             skill_names.add(d.name)
-
     tools = [gtypes.Tool(function_declarations=decls)] if decls else None
 
     started = time.perf_counter()
-    results: list[TestResult] = []
-
+    results = []
     for tc in req.testCases:
-        outcome = _run_one(
-            client, model, req.prompt, tc, tools, tool_names, skill_names, temperature,
+        outcomes = _run_test(
+            client, model, req.prompt, tc, tools,
+            tool_names, skill_names, rollouts_n, temperature,
         )
-        passed = _judge_pass(tc, outcome)
-        pass_rate = 1.0 if passed else 0.0
-        # No logprobs from function-call responses on Gemini yet; phase 12
-        # will explore whether an alternative signal (top-k reranking probe)
-        # gives us confidence here.
-        routing_score = 0.7 * pass_rate + 0.3 * pass_rate  # collapses to passRate
-        results.append(
-            TestResult(
-                testId=tc.id,
-                passRate=pass_rate,
-                meanLogprob=None,
-                meanSteps=float(outcome.steps),
-                latencyP50=outcome.latencyMs,
-                routingScore=routing_score,
-                rollouts=[outcome],
-                mock=False,
-            )
-        )
+        results.append(aggregate(tc, outcomes, mock=False))
 
     duration = (time.perf_counter() - started) * 1000
     return TestRunResponse(
         results=results,
         durationMs=duration,
-        sidecarVersion=f"0.2.0-genai-{model}",
+        sidecarVersion=f"0.3.0-genai-{model}",
     )

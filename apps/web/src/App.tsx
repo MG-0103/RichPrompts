@@ -314,14 +314,14 @@ function App() {
                 prompt: sources.prompt,
                 tools: sampleRegistryTools,
                 skills: sampleRegistrySkills,
-                config: { mock: useMock },
+                config: { mock: useMock, rollouts: 5, temperature: 0.7 },
               })}
               onRunOne={id => tests.run({
                 prompt: sources.prompt,
                 tools: sampleRegistryTools,
                 skills: sampleRegistrySkills,
                 onlyIds: [id],
-                config: { mock: useMock },
+                config: { mock: useMock, rollouts: 5, temperature: 0.7 },
               })}
               onCancel={tests.cancel}
               onUpsert={tests.upsert}
