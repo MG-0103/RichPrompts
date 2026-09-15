@@ -67,8 +67,19 @@ sidecar owns anything model-touching. Contract in
   means the description misled the model) plus a footer summary
   ("descriptions doing work: mean Δ, count above 20pp, count where
   stripped won"). Rollout drill-down shows both passes stacked.
-- **15 — Snapshot-diff runs:** run same suite against two snapshots,
-  side-by-side delta. Depends on Phase 9 History being built.
+- **15 — Snapshot-diff runs:** SHIPPED (routing-quality diff only;
+  per-doc history/restore still open in Phase 9 proper).
+  Rather than wait on Phase 9's full jsdiff/restore/History-tab
+  scope, this shipped the minimum needed for the routing-quality
+  diff: full-registry pins ({prompt, tools, skills} at one moment)
+  stored under `richprompt.registry.pins.v1`. Selecting a pin fires
+  a second /run in parallel against the pin sources; each pass is
+  cached separately (same content-hash key), so a re-run of the
+  same current-vs-baseline suite is essentially free.
+  UI shows the current metrics with inline Δ chips (pass, conc,
+  score) against the baseline. Δ chips are green when current
+  beats baseline, red when it regressed — the "did this edit help
+  routing?" question in one glance.
 - **16 — Reliability + config:** model selection, cost preview,
   retries, streaming results, sidecar Dockerfile.
 - **17 — Distractor injection:** paraphrased sibling tools;

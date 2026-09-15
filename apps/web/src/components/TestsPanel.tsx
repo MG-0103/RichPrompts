@@ -3,10 +3,12 @@ import type { TestCase, TestResult, RolloutOutcome } from '@richprompt/core'
 import type { SidecarStatus } from '../hooks/useTests'
 import type { CallTarget } from '../testing/registry'
 import type { TestingConfig } from '../persistence/testConfig'
+import type { RegistryPin } from '../persistence/pins'
 
 type Props = {
   tests: TestCase[]
   results: Record<string, TestResult>
+  baselineResults: Record<string, TestResult>
   loading: boolean
   error: string | null
   sidecar: SidecarStatus
@@ -15,6 +17,12 @@ type Props = {
   runnerConfig: TestingConfig
   onRunnerConfig: (c: TestingConfig) => void
   targets: CallTarget[]
+  pins: RegistryPin[]
+  selectedPinId: string | null
+  onSelectPin: (id: string | null) => void
+  onPinCurrent: () => void
+  onRemovePin: (id: string) => void
+  onClearBaseline: () => void
   onRunAll: () => void
   onRunOne: (id: string) => void
   onCancel: () => void
@@ -25,10 +33,13 @@ type Props = {
 }
 
 export function TestsPanel({
-  tests, results, loading, error, sidecar, useMock, onToggleMock,
+  tests, results, baselineResults, loading, error, sidecar, useMock, onToggleMock,
   runnerConfig, onRunnerConfig, targets,
+  pins, selectedPinId, onSelectPin, onPinCurrent, onRemovePin, onClearBaseline,
   onRunAll, onRunOne, onCancel, onUpsert, onRemove, onReset, onClearCache,
 }: Props) {
+  const selectedPin = pins.find(p => p.id === selectedPinId) ?? null
+  const hasBaseline = !!selectedPin && Object.keys(baselineResults).length > 0
   const [editing, setEditing] = useState<TestCase | null>(null)
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const [showConfig, setShowConfig] = useState(false)
@@ -81,7 +92,16 @@ export function TestsPanel({
           onClose={() => setShowConfig(false)}
         />
       )}
-      {loading && <RunningBanner useMock={useMock} count={tests.length} />}
+      <BaselineStrip
+        pins={pins}
+        selectedPinId={selectedPinId}
+        onSelect={onSelectPin}
+        onPinCurrent={onPinCurrent}
+        onRemovePin={onRemovePin}
+        onClearBaseline={onClearBaseline}
+        hasBaselineResults={hasBaseline}
+      />
+      {loading && <RunningBanner useMock={useMock} count={tests.length} baseline={!!selectedPin} />}
       {error && <div className="tests-error">{error}</div>}
       {sidecar.state === 'down' && !error && (
         <div className="tests-hint">
@@ -111,6 +131,7 @@ export function TestsPanel({
         <tbody>
           {tests.map(t => {
             const r = results[t.id]
+            const b = hasBaseline ? baselineResults[t.id] : undefined
             const isOpen = expanded.has(t.id)
             return (
               <React.Fragment key={t.id}>
@@ -124,12 +145,21 @@ export function TestsPanel({
                   </td>
                   <td className="t-q">{t.query}</td>
                   <td className="t-exp">{fmtExpect(t)}</td>
-                  <td>{r ? <PassBar rate={r.passRate} /> : <span className="dim">—</span>}</td>
-                  <td className="mono">{r ? (r.concentration * 100).toFixed(0) + '%' : <span className="dim">—</span>}</td>
+                  <td>
+                    {r ? <PassBar rate={r.passRate} /> : <span className="dim">—</span>}
+                    {b && r && <DeltaChip curr={r.passRate} base={b.passRate} scale={100} unit="pp" />}
+                  </td>
+                  <td className="mono">
+                    {r ? (r.concentration * 100).toFixed(0) + '%' : <span className="dim">—</span>}
+                    {b && r && <DeltaChip curr={r.concentration} base={b.concentration} scale={100} unit="pp" />}
+                  </td>
                   <td className="t-exp">{r ? fmtModal(r.modalCalled, t) : <span className="dim">—</span>}</td>
                   <td className="mono">{r ? r.meanSteps.toFixed(1) : <span className="dim">—</span>}</td>
                   <td className="mono">{r ? Math.round(r.latencyP50) + 'ms' : <span className="dim">—</span>}</td>
-                  <td className="mono">{r ? (r.routingScore * 100).toFixed(0) : <span className="dim">—</span>}</td>
+                  <td className="mono">
+                    {r ? (r.routingScore * 100).toFixed(0) : <span className="dim">—</span>}
+                    {b && r && <DeltaChip curr={r.routingScore} base={b.routingScore} scale={100} unit="" />}
+                  </td>
                   <td className="mono">{fmtDelta(r)}</td>
                   <td className="t-actions" onClick={e => e.stopPropagation()}>
                     <button className="link-btn" onClick={() => onRunOne(t.id)}>run</button>
@@ -228,7 +258,15 @@ function ConfigStrip({
   )
 }
 
-function RunningBanner({ useMock, count }: { useMock: boolean; count: number }) {
+function RunningBanner({
+  useMock,
+  count,
+  baseline,
+}: {
+  useMock: boolean
+  count: number
+  baseline: boolean
+}) {
   const [elapsed, setElapsed] = useState(0)
   useEffect(() => {
     setElapsed(0)
@@ -239,9 +277,100 @@ function RunningBanner({ useMock, count }: { useMock: boolean; count: number }) 
   return (
     <div className="running-banner">
       <span className="spinner" /> Running {count} test{count === 1 ? '' : 's'}
+      {baseline ? ' × 2 (vs. baseline)' : ''}
       {' '}({useMock ? 'mock' : 'real'}) · {(elapsed / 1000).toFixed(1)}s
     </div>
   )
+}
+
+function BaselineStrip({
+  pins,
+  selectedPinId,
+  onSelect,
+  onPinCurrent,
+  onRemovePin,
+  onClearBaseline,
+  hasBaselineResults,
+}: {
+  pins: RegistryPin[]
+  selectedPinId: string | null
+  onSelect: (id: string | null) => void
+  onPinCurrent: () => void
+  onRemovePin: (id: string) => void
+  onClearBaseline: () => void
+  hasBaselineResults: boolean
+}) {
+  const selected = pins.find(p => p.id === selectedPinId) ?? null
+  return (
+    <div className="baseline-strip">
+      <span className="baseline-label">Baseline</span>
+      <select
+        value={selectedPinId ?? ''}
+        onChange={e => {
+          const id = e.target.value || null
+          if (id !== selectedPinId) onClearBaseline()
+          onSelect(id)
+        }}
+      >
+        <option value="">— none —</option>
+        {pins.slice().reverse().map(p => (
+          <option key={p.id} value={p.id}>
+            {p.label} ({fmtAge(p.timestamp)})
+          </option>
+        ))}
+      </select>
+      {selected && (
+        <button
+          className="link-btn danger"
+          onClick={() => {
+            onRemovePin(selected.id)
+            onClearBaseline()
+          }}
+          title="Delete this pin"
+        >
+          delete
+        </button>
+      )}
+      <button className="link-btn" onClick={onPinCurrent} title="Save current prompt + registry as a baseline">
+        + Pin current
+      </button>
+      {hasBaselineResults && (
+        <span className="baseline-active">Δ column shows current − baseline</span>
+      )}
+      <span className="baseline-hint">
+        {pins.length === 0 ? 'No pins yet — save one before editing to compare' : ''}
+      </span>
+    </div>
+  )
+}
+
+function DeltaChip({
+  curr,
+  base,
+  scale,
+  unit,
+}: {
+  curr: number
+  base: number
+  scale: number
+  unit: string
+}) {
+  const raw = (curr - base) * scale
+  const cls = raw > 0.5 ? 'delta-pos' : raw < -0.5 ? 'delta-neg' : 'delta-zero'
+  const sign = raw > 0 ? '+' : ''
+  const val = Math.abs(raw) < 1 ? raw.toFixed(1) : Math.round(raw).toString()
+  return <span className={`delta-chip ${cls}`}>{sign}{val}{unit}</span>
+}
+
+function fmtAge(ts: number): string {
+  const ms = Date.now() - ts
+  const min = Math.round(ms / 60000)
+  if (min < 1) return 'just now'
+  if (min < 60) return `${min}m ago`
+  const hr = Math.round(min / 60)
+  if (hr < 24) return `${hr}h ago`
+  const d = Math.round(hr / 24)
+  return `${d}d ago`
 }
 
 function RolloutTable({

@@ -24,6 +24,7 @@ import { useLLMReview } from './hooks/useLLMReview'
 import { useTests } from './hooks/useTests'
 import { loadConfig, resetConfig, saveConfig } from './persistence/config'
 import { loadTestingConfig, saveTestingConfig } from './persistence/testConfig'
+import { addPin, loadPins, removePin, type RegistryPin } from './persistence/pins'
 import { callTargets } from './testing/registry'
 import { sampleRegistryTools, sampleRegistrySkills } from '@richprompt/core'
 import type { RuleConfig } from '@richprompt/core'
@@ -73,6 +74,31 @@ function App() {
     () => callTargets(sampleRegistryTools, sampleRegistrySkills),
     [],
   )
+  const [pins, setPins] = useState<RegistryPin[]>(() => loadPins())
+  const [selectedPinId, setSelectedPinId] = useState<string | null>(null)
+  const pinCurrent = () => {
+    const label = window.prompt(
+      'Label for this baseline pin?',
+      `pin-${new Date().toLocaleString()}`,
+    )
+    if (!label) return
+    const next = addPin({
+      label,
+      prompt: sources.prompt,
+      tools: sampleRegistryTools,
+      skills: sampleRegistrySkills,
+    })
+    setPins(next)
+    setSelectedPinId(next[next.length - 1].id)
+  }
+  const removePinAt = (id: string) => {
+    setPins(removePin(id))
+    if (selectedPinId === id) setSelectedPinId(null)
+  }
+  const selectedPin = pins.find(p => p.id === selectedPinId) ?? null
+  const baselineFor = selectedPin
+    ? { prompt: selectedPin.prompt, tools: selectedPin.tools, skills: selectedPin.skills }
+    : undefined
   const [previewOpen, setPreviewOpen] = useState<boolean>(() => {
     try { return localStorage.getItem('richprompt.preview.open') !== '0' } catch { return true }
   })
@@ -324,19 +350,26 @@ function App() {
               runnerConfig={runnerConfig}
               onRunnerConfig={updateRunnerConfig}
               targets={targets}
+              baselineResults={tests.baselineResults}
+              pins={pins}
+              selectedPinId={selectedPinId}
+              onSelectPin={setSelectedPinId}
+              onPinCurrent={pinCurrent}
+              onRemovePin={removePinAt}
+              onClearBaseline={tests.clearBaseline}
               onRunAll={() => tests.run({
                 prompt: sources.prompt,
                 tools: sampleRegistryTools,
                 skills: sampleRegistrySkills,
                 config: { mock: useMock, ...runnerConfig },
-              })}
+              }, baselineFor)}
               onRunOne={id => tests.run({
                 prompt: sources.prompt,
                 tools: sampleRegistryTools,
                 skills: sampleRegistrySkills,
                 onlyIds: [id],
                 config: { mock: useMock, ...runnerConfig },
-              })}
+              }, baselineFor)}
               onCancel={tests.cancel}
               onUpsert={tests.upsert}
               onRemove={tests.remove}

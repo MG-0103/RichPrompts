@@ -664,6 +664,47 @@ body.splitter-dragging .preview-col { pointer-events: none; }
 .summary-metric .mono { color: #ddd; margin-left: 4px; }
 .summary-metric.warn { color: #dc9; }
 .summary-metric.warn .mono { color: #f9c; }
+
+.baseline-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  background: #1e2530;
+  border-bottom: 1px solid #2a3345;
+  font-size: 12px;
+  color: #cde;
+}
+.baseline-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #7aa;
+  font-weight: 600;
+}
+.baseline-strip select {
+  background: #262e3a;
+  border: 1px solid #333;
+  border-radius: 3px;
+  color: #ddd;
+  padding: 3px 8px;
+  font-size: 11px;
+  min-width: 220px;
+}
+.baseline-active { color: #9c9; font-size: 11px; }
+.baseline-hint { color: #778; font-size: 11px; margin-left: auto; font-style: italic; }
+
+.delta-chip {
+  margin-left: 6px;
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  padding: 0 4px;
+  border-radius: 2px;
+  vertical-align: middle;
+}
+.delta-chip.delta-pos { color: #6c6; background: #1a2a1a; }
+.delta-chip.delta-neg { color: #e77; background: #2a1a1a; }
+.delta-chip.delta-zero { color: #666; }
 .mono { font-family: ui-monospace, monospace; }
 .dim { color: #555; }
 .tests-empty { padding: 14px 16px; color: #666; text-align: center; }
