@@ -60,7 +60,7 @@ export function TestsPanel({
           <span>real runner {realReady ? '' : '(unavailable)'}</span>
         </label>
         <button className="chip-btn" onClick={() => setShowConfig(v => !v)}>
-          {`${runnerConfig.rollouts}× · t=${runnerConfig.temperature} · ${runnerConfig.model}`}
+          {`${runnerConfig.rollouts}× · t=${runnerConfig.temperature} · ${runnerConfig.model}${runnerConfig.ablation ? ' · ablation' : ''}`}
         </button>
         <div className="tests-actions">
           <button className="rescan-btn" onClick={() => setEditing(BLANK_TEST())}>+ Add</button>
@@ -104,6 +104,7 @@ export function TestsPanel({
             <th>steps</th>
             <th title="p50 latency across rollouts, ms.">lat</th>
             <th title="0.7 * passRate + 0.3 * confidence-proxy.">score</th>
+            <th title="passRate − stripped.passRate. High delta = descriptions doing real work. Only populated when ablation was enabled for the run.">desc-Δ</th>
             <th></th>
           </tr>
         </thead>
@@ -129,6 +130,7 @@ export function TestsPanel({
                   <td className="mono">{r ? r.meanSteps.toFixed(1) : <span className="dim">—</span>}</td>
                   <td className="mono">{r ? Math.round(r.latencyP50) + 'ms' : <span className="dim">—</span>}</td>
                   <td className="mono">{r ? (r.routingScore * 100).toFixed(0) : <span className="dim">—</span>}</td>
+                  <td className="mono">{fmtDelta(r)}</td>
                   <td className="t-actions" onClick={e => e.stopPropagation()}>
                     <button className="link-btn" onClick={() => onRunOne(t.id)}>run</button>
                     <button className="link-btn" onClick={() => setEditing({ ...t })}>edit</button>
@@ -137,8 +139,14 @@ export function TestsPanel({
                 </tr>
                 {isOpen && r && (
                   <tr className="rollout-row">
-                    <td colSpan={11}>
-                      <RolloutTable rollouts={r.rollouts} test={t} />
+                    <td colSpan={12}>
+                      <RolloutTable rollouts={r.rollouts} test={t} label="full descriptions" />
+                      {r.stripped && (
+                        <>
+                          <div className="rollout-sub">names only (descriptions stripped)</div>
+                          <RolloutTable rollouts={r.stripped.rollouts} test={t} label="stripped" />
+                        </>
+                      )}
                     </td>
                   </tr>
                 )}
@@ -146,9 +154,10 @@ export function TestsPanel({
             )
           })}
           {tests.length === 0 && (
-            <tr><td colSpan={11} className="tests-empty">No tests yet. Click "+ Add" to create one.</td></tr>
+            <tr><td colSpan={12} className="tests-empty">No tests yet. Click "+ Add" to create one.</td></tr>
           )}
         </tbody>
+        <AblationSummary tests={tests} results={results} />
       </table>
 
       {editing && (
@@ -203,6 +212,17 @@ function ConfigStrip({
           placeholder="gemini-2.5-flash"
         />
       </label>
+      <label
+        className="ablation-toggle"
+        title="Run each test twice: once with real descriptions, once with them stripped. desc-Δ tells you how much the description is doing vs. the name alone. Doubles the call count."
+      >
+        <input
+          type="checkbox"
+          checked={config.ablation}
+          onChange={e => patch({ ablation: e.target.checked })}
+        />
+        <span>names-only ablation</span>
+      </label>
       <button className="link-btn" onClick={onClose}>close</button>
     </div>
   )
@@ -227,12 +247,14 @@ function RunningBanner({ useMock, count }: { useMock: boolean; count: number }) 
 function RolloutTable({
   rollouts,
   test,
+  label,
 }: {
   rollouts: RolloutOutcome[]
   test: TestCase
+  label?: string
 }) {
   return (
-    <table className="rollout-table">
+    <table className="rollout-table" data-label={label}>
       <thead>
         <tr><th>#</th><th>called</th><th>latency</th><th>steps</th><th>notes</th></tr>
       </thead>
@@ -315,6 +337,56 @@ function fmtModal(
     ? called.kind === 'none'
     : called.kind === expected.kind && called.name === expected.name
   return <span className={match ? 'modal-match' : 'modal-miss'}>{label}</span>
+}
+
+function fmtDelta(r: TestResult | undefined): React.ReactNode {
+  if (!r) return <span className="dim">—</span>
+  if (!r.stripped) return <span className="dim">—</span>
+  const delta = r.passRate - r.stripped.passRate
+  const cls = delta >= 0.2 ? 'delta-high' : delta > 0 ? 'delta-pos' : delta < -0.1 ? 'delta-neg' : 'delta-zero'
+  const sign = delta > 0 ? '+' : ''
+  return (
+    <span className={cls} title={`full: ${(r.passRate * 100).toFixed(0)}%  ·  stripped: ${(r.stripped.passRate * 100).toFixed(0)}%`}>
+      {sign}{(delta * 100).toFixed(0)}
+    </span>
+  )
+}
+
+function AblationSummary({
+  tests,
+  results,
+}: {
+  tests: TestCase[]
+  results: Record<string, TestResult>
+}) {
+  const withAblation = tests
+    .map(t => results[t.id])
+    .filter((r): r is TestResult => !!r?.stripped)
+  if (withAblation.length === 0) return null
+  const deltas = withAblation.map(r => r.passRate - (r.stripped?.passRate ?? 0))
+  const mean = deltas.reduce((a, b) => a + b, 0) / deltas.length
+  const high = deltas.filter(d => d >= 0.2).length
+  const negative = deltas.filter(d => d < 0).length
+  return (
+    <tfoot>
+      <tr className="summary-row">
+        <td colSpan={12}>
+          <span className="summary-label">descriptions doing work</span>
+          <span className="summary-metric">
+            mean Δ <span className="mono">{(mean * 100).toFixed(0)}pp</span>
+          </span>
+          <span className="summary-metric">
+            high (≥20pp) <span className="mono">{high}/{withAblation.length}</span>
+          </span>
+          {negative > 0 && (
+            <span className="summary-metric warn">
+              stripped scored higher on <span className="mono">{negative}</span> — likely misleading descriptions
+            </span>
+          )}
+        </td>
+      </tr>
+    </tfoot>
+  )
 }
 
 function BLANK_TEST(): TestCase {

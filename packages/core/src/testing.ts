@@ -15,6 +15,11 @@ export interface TestRunConfig {
   rollouts?: number
   temperature?: number
   mock?: boolean
+  /** When true, each test runs a second time with tool and skill
+   *  descriptions stripped, and the paired result is attached as
+   *  `stripped` on the corresponding `TestResult`. Doubles the
+   *  work per test (per pass caches independently). */
+  ablation?: boolean
 }
 
 export interface TestRunRequest {
@@ -54,6 +59,10 @@ export interface TestResult {
   /** Was this served from cache? */
   cached?: boolean
   mock?: boolean
+  /** When the run requested ablation, this carries the paired
+   *  descriptions-stripped result. Compute `descriptionDelta` as
+   *  `passRate - stripped.passRate`. */
+  stripped?: TestResult | null
 }
 
 export interface TestRunResponse {

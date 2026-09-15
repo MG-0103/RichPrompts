@@ -2,6 +2,7 @@ export interface TestingConfig {
   rollouts: number
   temperature: number
   model: string
+  ablation: boolean
 }
 
 const KEY = 'richprompt.tests.config.v1'
@@ -10,6 +11,7 @@ export const DEFAULT_TESTING_CONFIG: TestingConfig = {
   rollouts: 5,
   temperature: 0.7,
   model: 'gemini-2.5-flash',
+  ablation: false,
 }
 
 export function loadTestingConfig(): TestingConfig {
@@ -21,6 +23,7 @@ export function loadTestingConfig(): TestingConfig {
       rollouts: clamp(parsed.rollouts ?? DEFAULT_TESTING_CONFIG.rollouts, 1, 20),
       temperature: clamp(parsed.temperature ?? DEFAULT_TESTING_CONFIG.temperature, 0, 2),
       model: parsed.model?.trim() || DEFAULT_TESTING_CONFIG.model,
+      ablation: !!parsed.ablation,
     }
   } catch {
     return { ...DEFAULT_TESTING_CONFIG }

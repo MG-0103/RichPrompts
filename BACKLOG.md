@@ -57,8 +57,16 @@ sidecar owns anything model-touching. Contract in
   Deferred to phase 16: real SSE progress (per-test streaming
   updates instead of the current single-shot POST) — the running
   banner is honest that we don't know per-test progress today.
-- **14 — Names-only ablation:** `strip: 'descriptions'` flag on the
-  run; per-test `descriptionDelta`.
+- **14 — Names-only ablation:** SHIPPED.
+  `config.ablation: true` runs each test twice: once with real
+  descriptions, once with tool and skill frontmatter descriptions
+  stripped. Cache uses a `stripped` axis (not the `ablation` flag),
+  so full and stripped passes cache independently and each is
+  reusable across ablation-on and ablation-off runs. UI shows
+  `desc-Δ` per test (green when high, red when negative — negative
+  means the description misled the model) plus a footer summary
+  ("descriptions doing work: mean Δ, count above 20pp, count where
+  stripped won"). Rollout drill-down shows both passes stacked.
 - **15 — Snapshot-diff runs:** run same suite against two snapshots,
   side-by-side delta. Depends on Phase 9 History being built.
 - **16 — Reliability + config:** model selection, cost preview,

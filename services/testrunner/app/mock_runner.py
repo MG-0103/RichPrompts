@@ -43,15 +43,23 @@ def _score_query(query: str, expected_name: str | None) -> float:
 
 
 def _run_one(
-    test: TestCase, prompt: str, rollout: int, config: TestRunConfig
+    test: TestCase, prompt: str, rollout: int, config: TestRunConfig,
+    stripped: bool = False,
 ) -> RolloutOutcome:
-    rng = random.Random(_seed_for(test, prompt, rollout))
+    rng = random.Random(_seed_for(test, prompt, rollout) ^ (0xAB if stripped else 0))
     latency = 40 + rng.random() * 120
     steps = rng.randint(1, 4)
 
     expected_kind = test.expect.kind
     expected_name = getattr(test.expect, "name", None)
     base = _score_query(test.query, expected_name)
+    # Stripped-description ablation: without a description, the model
+    # only has the tool name to go on, so success depends on how
+    # informative the name alone is. Approximate that by penalizing
+    # cases where the expected name doesn't appear verbatim in the
+    # query — the honest floor of "just the name".
+    if stripped and expected_name and expected_name.lower() not in test.query.lower():
+        base *= 0.4
     # More temperature → more noise; keeps concentration signal alive.
     noise = (rng.random() - 0.5) * min(config.temperature, 1.5) * 0.5
     pick_prob = min(0.99, max(0.02, base + noise))
@@ -72,19 +80,22 @@ def _run_one(
     )
 
 
-def run_mock(req: TestRunRequest) -> TestRunResponse:
+def run_mock(req: TestRunRequest, stripped: bool = False) -> TestRunResponse:
     started = time.perf_counter()
     config = req.config or TestRunConfig()
     rollouts_n = max(1, config.rollouts)
 
     results = []
     for tc in req.testCases:
-        outcomes = [_run_one(tc, req.prompt, i, config) for i in range(rollouts_n)]
+        outcomes = [
+            _run_one(tc, req.prompt, i, config, stripped=stripped)
+            for i in range(rollouts_n)
+        ]
         results.append(aggregate(tc, outcomes, mock=True))
 
     duration = (time.perf_counter() - started) * 1000
     return TestRunResponse(
         results=results,
         durationMs=duration,
-        sidecarVersion="0.3.0-mock",
+        sidecarVersion="0.4.0-mock",
     )

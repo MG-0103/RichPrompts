@@ -28,7 +28,16 @@ def key_for(
     skills: list[RegistryEntry],
     test: TestCase,
     config: TestRunConfig,
+    stripped: bool,
 ) -> str:
+    """Cache key for one pass.
+
+    `stripped` axis is part of the key so a full-descriptions run
+    and a stripped-descriptions run cache separately and each is
+    reusable across ablation-on vs. ablation-off requests. The
+    `ablation` flag itself is deliberately excluded — it only
+    controls whether to *also* run the stripped pass.
+    """
     payload = {
         "p": prompt,
         "t": sorted([{"id": t.id, "raw": t.raw} for t in tools], key=lambda x: x["id"]),
@@ -40,6 +49,7 @@ def key_for(
             "temperature": config.temperature,
             "mock": config.mock,
         },
+        "stripped": stripped,
     }
     return hashlib.sha256(_canonical(payload).encode()).hexdigest()
 

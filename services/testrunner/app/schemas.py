@@ -28,6 +28,7 @@ class TestRunConfig(BaseModel):
     rollouts: int = 5
     temperature: float = 0.7
     mock: bool = True
+    ablation: bool = False
 
 
 class RegistryEntry(BaseModel):
@@ -69,6 +70,10 @@ class TestResult(BaseModel):
     rollouts: list[RolloutOutcome]
     cached: bool = False
     mock: bool = False
+    stripped: "TestResult | None" = None
+
+
+TestResult.model_rebuild()
 
 
 class TestRunResponse(BaseModel):
