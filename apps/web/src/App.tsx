@@ -55,6 +55,13 @@ function App() {
   const llm = useLLMReview()
   const tests = useTests()
   const [bottomTab, setBottomTab] = useState<BottomTab>('problems')
+  const [useMock, setUseMock] = useState<boolean>(() => {
+    try { return localStorage.getItem('richprompt.tests.mock') !== '0' } catch { return true }
+  })
+  const toggleMock = (v: boolean) => {
+    setUseMock(v)
+    try { localStorage.setItem('richprompt.tests.mock', v ? '1' : '0') } catch { /* ignore */ }
+  }
   const [previewOpen, setPreviewOpen] = useState<boolean>(() => {
     try { return localStorage.getItem('richprompt.preview.open') !== '0' } catch { return true }
   })
@@ -301,18 +308,20 @@ function App() {
               loading={tests.loading}
               error={tests.error}
               sidecar={tests.sidecar}
+              useMock={useMock}
+              onToggleMock={toggleMock}
               onRunAll={() => tests.run({
                 prompt: sources.prompt,
                 tools: sampleRegistryTools,
                 skills: sampleRegistrySkills,
-                config: { mock: true },
+                config: { mock: useMock },
               })}
               onRunOne={id => tests.run({
                 prompt: sources.prompt,
                 tools: sampleRegistryTools,
                 skills: sampleRegistrySkills,
                 onlyIds: [id],
-                config: { mock: true },
+                config: { mock: useMock },
               })}
               onCancel={tests.cancel}
               onUpsert={tests.upsert}

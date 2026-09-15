@@ -10,7 +10,15 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# Phase 11: routing decisions via google-genai directly (FunctionDeclaration
+# accepts raw JSON schema, so the sidecar can build tools from the web app's
+# in-memory registry without exec()-generating Python stubs).
+# Phase 12+ will add google-adk for LlmAgent trajectory capture.
+genai = [
+    "google-genai>=1.0",
+]
 adk = [
+    "google-genai>=1.0",
     "google-adk>=0.3",
 ]
 

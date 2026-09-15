@@ -24,9 +24,14 @@ sidecar owns anything model-touching. Contract in
 ### Phase status
 
 - **10 — Foundations (mock runner + contract):** SHIPPED.
-- **11 — Real ADK single rollout:** next. Replace `mock_runner.py`
-  with an ADK agent built from prompt+tools+skills. Capture the
-  tool call, args, latency, trajectory steps.
+- **11 — Real routing decision (single rollout):** SHIPPED.
+  Implemented with `google-genai` directly rather than `google.adk`
+  because ADK's decorator-based tool registration fights our
+  "tools defined by external JSON" model. Same underlying model
+  (Gemini) and same tool-call semantics; `LlmAgent` swap-in is a
+  single-file change in phase 12.x when trajectory events pay off.
+  `temperature=0`. Logprobs not surfaced by Gemini for function
+  calls yet — deferred to phase 12.
 - **12 — N-rollout pass rate + logprob:** aggregate over N=5 at
   temp=0.7. Cache by content hash so re-runs are free.
 - **13 — Tests tab authoring/results UX:** editor polish, dropdowns

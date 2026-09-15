@@ -8,6 +8,8 @@ type Props = {
   loading: boolean
   error: string | null
   sidecar: SidecarStatus
+  useMock: boolean
+  onToggleMock: (v: boolean) => void
   onRunAll: () => void
   onRunOne: (id: string) => void
   onCancel: () => void
@@ -17,9 +19,10 @@ type Props = {
 }
 
 export function TestsPanel({
-  tests, results, loading, error, sidecar,
+  tests, results, loading, error, sidecar, useMock, onToggleMock,
   onRunAll, onRunOne, onCancel, onUpsert, onRemove, onReset,
 }: Props) {
+  const realReady = sidecar.state === 'up' && sidecar.real?.available === true
   const [editing, setEditing] = useState<TestCase | null>(null)
 
   return (
@@ -27,6 +30,18 @@ export function TestsPanel({
       <div className="tests-header">
         <span>Tests</span>
         <SidecarBadge status={sidecar} />
+        <label
+          className={`runner-toggle ${!realReady && !useMock ? 'warn' : ''}`}
+          title={realReady ? 'Toggle real Gemini calls vs. mock' : (sidecarReason(sidecar) ?? 'Real runner not available on this sidecar')}
+        >
+          <input
+            type="checkbox"
+            checked={!useMock}
+            disabled={!realReady && useMock}
+            onChange={e => onToggleMock(!e.target.checked)}
+          />
+          <span>real runner {realReady ? '' : '(unavailable)'}</span>
+        </label>
         <div className="tests-actions">
           <button className="rescan-btn" onClick={() => setEditing(BLANK_TEST())}>+ Add</button>
           <button className="rescan-btn" onClick={onReset} title="Restore seed tests">Reset</button>
@@ -98,9 +113,19 @@ export function TestsPanel({
   )
 }
 
+function sidecarReason(status: SidecarStatus): string | undefined {
+  if (status.state !== 'up') return undefined
+  return status.real?.reason ?? undefined
+}
+
 function SidecarBadge({ status }: { status: SidecarStatus }) {
   if (status.state === 'up') {
-    return <span className="sidecar-badge up">sidecar: {status.mode ?? 'up'} {status.version && `v${status.version}`}</span>
+    const label = status.mode ?? 'up'
+    return (
+      <span className="sidecar-badge up" title={sidecarReason(status) ?? undefined}>
+        sidecar: {label}{status.version && ` v${status.version}`}
+      </span>
+    )
   }
   if (status.state === 'down') {
     return <span className="sidecar-badge down">sidecar: offline</span>

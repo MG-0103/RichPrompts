@@ -4,11 +4,16 @@ Python sidecar for the RichPrompt linter. Runs test cases against the
 current in-memory registry (prompt + tools + skills) and reports
 routing-quality metrics per test.
 
-**Phase 10 (current):** mock runner only — deterministic, no LLM calls,
-no ADK. Wires up the whole request/response contract so the web UI can
-be built and shipped independently of Phase 11's real agent integration.
+**Phase 11 (current):** two modes.
+- `mock` — deterministic, no LLM calls. Default. Always available.
+- `real` — one rollout per test against Gemini via `google-genai`.
+  `temperature=0`, no logprobs yet.
 
-## Run (dev)
+Phase 12+ will add multi-rollout sampling, real logprob capture (or a
+reranking-probe alternative), and lift into `google.adk.agents.LlmAgent`
+for trajectory events.
+
+## Run (mock only)
 
 ```
 cd services/testrunner
@@ -17,25 +22,31 @@ pip install -e .
 uvicorn app.main:app --port 8787 --reload
 ```
 
-The web app expects the sidecar on `http://localhost:8787` (override via
-`VITE_TESTRUNNER_URL`).
+## Run (with real Gemini routing)
+
+```
+pip install -e '.[genai]'
+export GOOGLE_API_KEY=…            # get one at https://aistudio.google.com/
+uvicorn app.main:app --port 8787 --reload
+```
+
+`GET /health` reports which modes are available:
+
+```
+{ "ok": true, "version": "0.2.0", "mode": "real+mock",
+  "real": {"available": true, "reason": null} }
+```
 
 ## Endpoints
 
-- `GET /health` → `{ok, version, mode}`
-- `POST /run` → runs all test cases and returns per-test metrics.
+- `GET /health` → `{ok, version, mode, real}`
+- `POST /run` → runs the test cases. Body: `TestRunRequest` (see
+  `packages/core/src/testing.ts`). Set `config.mock=false` to use the
+  real runner; the sidecar returns HTTP 503 if it isn't ready
+  (missing API key, missing dep) so the UI can surface a real error
+  rather than silently falling back.
 
-Request shape matches `TestRunRequest` in
-`packages/core/src/testing.ts`; response matches `TestRunResponse`.
+## Model selection
 
-## Phase 11 preview
-
-The real runner will replace `mock_runner.py` with an ADK-based one:
-
-- Build a `google.adk.Agent` from the prompt (system prompt), tools
-  (function tools with stub callables), and skills (tool-like entries).
-- Loop N rollouts at the configured temperature, capture the tool call,
-  argument shape, latency, trajectory-step count, and — where the model
-  exposes it — the `avg_logprobs` on the selected tool.
-- Everything else in this repo (schemas, HTTP surface, web UI) stays
-  unchanged.
+Defaults to `gemini-2.5-flash`. Override per-request via
+`config.model` (any Gemini model your API key can access).

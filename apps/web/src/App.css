@@ -442,6 +442,21 @@ body.splitter-dragging .preview-col { pointer-events: none; }
   z-index: 2;
 }
 .tests-actions { margin-left: auto; display: flex; gap: 6px; }
+.runner-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #bbb;
+  padding: 2px 8px;
+  border: 1px solid #333;
+  border-radius: 3px;
+  background: #262626;
+  cursor: pointer;
+  user-select: none;
+}
+.runner-toggle input { margin: 0; }
+.runner-toggle.warn { border-color: #744; color: #dc9; }
 .tests-error {
   margin: 6px 16px;
   padding: 8px 12px;

@@ -5,7 +5,12 @@ import { checkHealth, runTests } from '../testing/client'
 
 export type SidecarStatus =
   | { state: 'unknown' }
-  | { state: 'up'; version?: string; mode?: string }
+  | {
+      state: 'up'
+      version?: string
+      mode?: string
+      real?: { available: boolean; reason?: string | null }
+    }
   | { state: 'down' }
 
 export function useTests() {
@@ -37,14 +42,18 @@ export function useTests() {
 
   const reset = useCallback(() => setTestsState(resetTests()), [])
 
-  useEffect(() => {
-    let cancelled = false
-    checkHealth().then(h => {
-      if (cancelled) return
-      setSidecar(h.ok ? { state: 'up', version: h.version, mode: h.mode } : { state: 'down' })
-    })
-    return () => { cancelled = true }
+  const refreshHealth = useCallback(async () => {
+    const h = await checkHealth()
+    setSidecar(
+      h.ok
+        ? { state: 'up', version: h.version, mode: h.mode, real: h.real }
+        : { state: 'down' },
+    )
   }, [])
+
+  useEffect(() => {
+    refreshHealth()
+  }, [refreshHealth])
 
   const run = useCallback(async (req: Omit<TestRunRequest, 'testCases'> & { onlyIds?: string[] }) => {
     setError(null)
@@ -69,16 +78,17 @@ export function useTests() {
         for (const r of res.results) next[r.testId] = r
         return next
       })
-      setSidecar({ state: 'up', version: res.sidecarVersion, mode: 'mock' })
+      // trust the fresh health lookup rather than assuming the mode
+      refreshHealth()
     } catch (e) {
       if ((e as Error).name !== 'AbortError') {
         setError((e as Error).message)
-        setSidecar({ state: 'down' })
+        refreshHealth()
       }
     } finally {
       setLoading(false)
     }
-  }, [tests])
+  }, [tests, refreshHealth])
 
   const cancel = useCallback(() => {
     abortRef.current?.abort()

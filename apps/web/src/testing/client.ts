@@ -18,7 +18,14 @@ export async function runTests(req: TestRunRequest, signal?: AbortSignal): Promi
   return (await res.json()) as TestRunResponse
 }
 
-export async function checkHealth(signal?: AbortSignal): Promise<{ ok: boolean; version?: string; mode?: string }> {
+export type Health = {
+  ok: boolean
+  version?: string
+  mode?: string
+  real?: { available: boolean; reason?: string | null }
+}
+
+export async function checkHealth(signal?: AbortSignal): Promise<Health> {
   try {
     const res = await fetch(`${BASE}/health`, { signal })
     if (!res.ok) return { ok: false }
