@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Editor, { type Monaco } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import {
+  analyzeStructure,
   badPrompt,
   badTool,
   badSkill,
@@ -9,6 +10,7 @@ import {
   type Diagnostic,
   type DocType,
   type Section,
+  type StructureReport,
 } from '@richprompt/core'
 import { useLinter } from './hooks/useLinter'
 import { diagnosticsToMarkers, MARKER_OWNER, offsetToRange, sectionsToDecorations } from './monaco/adapter'
@@ -21,6 +23,7 @@ import { SettingsPanel } from './components/SettingsPanel'
 import { PreviewPane } from './components/PreviewPane'
 import { TestsPanel } from './components/TestsPanel'
 import { HistoryPanel } from './components/HistoryPanel'
+import { StructurePanel } from './components/StructurePanel'
 import { useRegistry } from './hooks/useRegistry'
 import { useScore } from './hooks/useScore'
 import { useLLMReview } from './hooks/useLLMReview'
@@ -34,7 +37,7 @@ import { sampleRegistryTools, sampleRegistrySkills } from '@richprompt/core'
 import type { RuleConfig } from '@richprompt/core'
 import './App.css'
 
-type BottomTab = 'problems' | 'registry' | 'review' | 'tests' | 'history' | 'settings'
+type BottomTab = 'problems' | 'registry' | 'review' | 'tests' | 'structure' | 'history' | 'settings'
 
 const FIXTURES: Record<DocType, string> = {
   prompt: badPrompt,
@@ -78,6 +81,13 @@ function App() {
     setRunnerConfig(c)
     saveTestingConfig(c)
   }
+  // R1α: sections + budget only. Compute inline (main thread) for now;
+  // R1γ moves this into a Web Worker once we add duplication + noise.
+  const structureReport: StructureReport | null = useMemo(() => {
+    if (docType === 'tool') return null
+    return analyzeStructure(source, docType, { model: runnerConfig.model })
+  }, [source, docType, runnerConfig.model])
+  const isBigPrompt = structureReport ? structureReport.chars >= 5000 : false
   const targets = useMemo(
     () => callTargets(sampleRegistryTools, sampleRegistrySkills),
     [],
@@ -346,6 +356,15 @@ function App() {
           >
             LLM Review
           </button>
+          {structureReport && (
+            <button
+              className={`btab ${bottomTab === 'structure' ? 'active' : ''}`}
+              onClick={() => setBottomTab('structure')}
+              title="Sections, budget, and (later) duplication + extraction"
+            >
+              Structure{isBigPrompt && bottomTab !== 'structure' && <span className="btab-dot" />}
+            </button>
+          )}
           <button
             className={`btab ${bottomTab === 'tests' ? 'active' : ''}`}
             onClick={() => setBottomTab('tests')}
@@ -420,6 +439,20 @@ function App() {
               onRemove={tests.remove}
               onReset={tests.reset}
               onClearCache={tests.clearCache}
+            />
+          )}
+          {bottomTab === 'structure' && structureReport && (
+            <StructurePanel
+              report={structureReport}
+              onJump={offset => {
+                const ed = editorRef.current
+                const model = ed?.getModel()
+                if (!ed || !model) return
+                const r = offsetToRange(model, offset, offset + 1)
+                ed.revealRangeInCenter(r)
+                ed.setSelection(r)
+                ed.focus()
+              }}
             />
           )}
           {bottomTab === 'history' && (

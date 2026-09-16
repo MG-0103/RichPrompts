@@ -45,6 +45,19 @@ export type {
   RolloutOutcome,
 } from './testing'
 export type { Version, VersionKind } from './version'
+export {
+  analyzeStructure,
+  budgetFor,
+  estimateTokens,
+  splitParagraphs,
+} from './structure'
+export type {
+  AnalyzeOptions,
+  BudgetInfo,
+  Paragraph,
+  SectionStats,
+  StructureReport,
+} from './structure'
 
 import { parseDocument } from './parser'
 import { parseToolDocument } from './toolParser'
