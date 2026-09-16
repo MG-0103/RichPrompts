@@ -1,7 +1,14 @@
 import type { editor, IRange } from 'monaco-editor'
-import type { Diagnostic, Severity } from '@richprompt/core'
+import type { CanonicalSection, Diagnostic, Section, Severity } from '@richprompt/core'
 
 export const MARKER_OWNER = 'richprompt'
+
+export const CANONICAL_COLORS: Record<CanonicalSection, string> = {
+  role:        '#4a8fd6',
+  task:        '#5ab671',
+  output:      '#9a6ad9',
+  constraints: '#d69a3a',
+}
 
 type MonacoNS = typeof import('monaco-editor')
 
@@ -22,6 +29,29 @@ export function offsetToRange(model: editor.ITextModel, startOffset: number, end
     endLineNumber: end.lineNumber,
     endColumn: end.column,
   }
+}
+
+export function sectionsToDecorations(
+  model: editor.ITextModel,
+  sections: Section[],
+): editor.IModelDeltaDecoration[] {
+  const out: editor.IModelDeltaDecoration[] = []
+  for (const s of sections) {
+    if (!s.canonical) continue
+    const r = offsetToRange(model, s.startOffset, s.endOffset)
+    out.push({
+      range: r,
+      options: {
+        isWholeLine: true,
+        linesDecorationsClassName: `canonical-bar canonical-${s.canonical}`,
+        overviewRuler: {
+          color: CANONICAL_COLORS[s.canonical],
+          position: 4,
+        },
+      },
+    })
+  }
+  return out
 }
 
 export function diagnosticsToMarkers(

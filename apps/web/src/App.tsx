@@ -5,11 +5,13 @@ import {
   badPrompt,
   badTool,
   badSkill,
+  parseDocument,
   type Diagnostic,
   type DocType,
+  type Section,
 } from '@richprompt/core'
 import { useLinter } from './hooks/useLinter'
-import { diagnosticsToMarkers, MARKER_OWNER, offsetToRange } from './monaco/adapter'
+import { diagnosticsToMarkers, MARKER_OWNER, offsetToRange, sectionsToDecorations } from './monaco/adapter'
 import { installProviders } from './monaco/providers'
 import { ProblemsPanel } from './components/ProblemsPanel'
 import { RegistryPanel } from './components/RegistryPanel'
@@ -55,6 +57,10 @@ function App() {
   const updateConfig = (cfg: RuleConfig) => { setConfigState(cfg); saveConfig(cfg) }
   const resetConfigToDefault = () => { resetConfig(); setConfigState(loadConfig()) }
   const diagnostics = useLinter(source, docType, config)
+  const sections: Section[] = useMemo(
+    () => docType === 'tool' ? [] : parseDocument(source, docType).sections,
+    [source, docType],
+  )
   const { breakdown, history } = useScore(source, docType, diagnostics)
   const { findings: registryFindings, rescan } = useRegistry()
   const llm = useLLMReview()
@@ -177,6 +183,7 @@ function App() {
   const monacoRef = useRef<Monaco | null>(null)
   const storeRef = useRef<{ current: Diagnostic[] }>({ current: [] })
   const providerCleanupRef = useRef<Map<string, () => void>>(new Map())
+  const decoIdsRef = useRef<string[]>([])
   storeRef.current.current = diagnostics
 
   useEffect(() => {
@@ -187,6 +194,14 @@ function App() {
     if (!model) return
     mon.editor.setModelMarkers(model, MARKER_OWNER, diagnosticsToMarkers(mon, model, diagnostics))
   }, [diagnostics])
+
+  useEffect(() => {
+    const ed = editorRef.current
+    const model = ed?.getModel()
+    if (!ed || !model) return
+    const next = sectionsToDecorations(model, sections)
+    decoIdsRef.current = ed.deltaDecorations(decoIdsRef.current, next)
+  }, [sections])
 
   useEffect(() => {
     const mon = monacoRef.current
@@ -353,7 +368,7 @@ function App() {
         </div>
         <div className="bottom-body">
           {bottomTab === 'problems' && (
-            <ProblemsPanel diagnostics={diagnostics} onJump={jumpTo} />
+            <ProblemsPanel diagnostics={diagnostics} sections={sections} onJump={jumpTo} />
           )}
           {bottomTab === 'registry' && (
             <RegistryPanel findings={registryFindings} onRescan={rescan} />

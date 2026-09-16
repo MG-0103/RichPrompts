@@ -1,9 +1,24 @@
-import type { DocType, ParsedDoc, Section } from './types'
+import type { CanonicalSection, DocType, ParsedDoc, Section } from './types'
 
 const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/
 const HEADING_RE = /^(#{1,6})\s+(.+)$/gm
 const XML_OPEN_RE = /<([a-zA-Z][\w:-]*)\b[^>]*>/g
 const VAR_RE = /\{\{\s*([a-zA-Z_][\w.-]*)\s*\}\}/g
+
+const CANONICAL_PATTERNS: Array<{ canonical: CanonicalSection; re: RegExp }> = [
+  { canonical: 'role',        re: /\b(role|persona|you are|identity)\b/i },
+  { canonical: 'task',        re: /\b(task|goal|objective|instructions?|job)\b/i },
+  { canonical: 'output',      re: /\b(output|format|response|response[- ]format|schema)\b/i },
+  { canonical: 'constraints', re: /\b(constraints?|rules?|requirements?|guidelines?|policies?|limitations?)\b/i },
+]
+
+export function classifyCanonical(name: string): CanonicalSection | undefined {
+  const lowered = name.toLowerCase()
+  for (const { canonical, re } of CANONICAL_PATTERNS) {
+    if (re.test(lowered)) return canonical
+  }
+  return undefined
+}
 
 export function parseDocument(raw: string, docType: DocType = 'prompt'): ParsedDoc {
   const sections: Section[] = []
@@ -42,6 +57,7 @@ export function parseDocument(raw: string, docType: DocType = 'prompt'): ParsedD
       text: raw.slice(h.end, sectionEnd).trim(),
       startOffset: h.start,
       endOffset: sectionEnd,
+      canonical: classifyCanonical(h.name),
     })
   }
 
@@ -58,6 +74,7 @@ export function parseDocument(raw: string, docType: DocType = 'prompt'): ParsedD
       text: raw.slice(m.index + m[0].length, closeMatch.index),
       startOffset: m.index,
       endOffset: closeMatch.index + closeMatch[0].length,
+      canonical: classifyCanonical(tag),
     })
   }
 

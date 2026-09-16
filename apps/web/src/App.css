@@ -992,3 +992,110 @@ body.splitter-dragging .preview-col { pointer-events: none; }
 .problem.sev-warn .glyph { color: #d90; }
 .problem.sev-info { border-left-color: #59a; }
 .problem.sev-info .glyph { color: #59a; }
+
+.canonical-bar {
+  width: 3px !important;
+  margin-left: 2px;
+  border-radius: 1px;
+}
+.canonical-role        { background: #4a8fd6; }
+.canonical-task        { background: #5ab671; }
+.canonical-output      { background: #9a6ad9; }
+.canonical-constraints { background: #d69a3a; }
+
+.section-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  margin-right: 8px;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  border-radius: 3px;
+  vertical-align: middle;
+  color: #fff;
+}
+.section-badge.sb-role        { background: #4a8fd6; }
+.section-badge.sb-task        { background: #5ab671; }
+.section-badge.sb-output      { background: #9a6ad9; }
+.section-badge.sb-constraints { background: #d69a3a; }
+
+/* Problems panel — grouping controls */
+.problems-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.problems-count { font-weight: 600; color: #ccc; }
+.filter-chips { display: flex; gap: 4px; }
+.chip {
+  font-size: 10px;
+  font-family: ui-monospace, monospace;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid #333;
+  background: #232323;
+  color: #ccc;
+  cursor: pointer;
+}
+.chip.sev-error { color: #e55; border-color: #533; }
+.chip.sev-warn  { color: #d90; border-color: #553; }
+.chip.sev-info  { color: #59a; border-color: #345; }
+.chip.muted { opacity: 0.35; text-decoration: line-through; }
+.group-mode { display: flex; margin-left: auto; }
+.gm-btn {
+  font-size: 10px;
+  padding: 3px 10px;
+  background: #232323;
+  color: #999;
+  border: 1px solid #333;
+  border-right: none;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.gm-btn:first-child { border-radius: 3px 0 0 3px; }
+.gm-btn:last-child  { border-radius: 0 3px 3px 0; border-right: 1px solid #333; }
+.gm-btn.active { background: #094771; color: #fff; border-color: #094771; }
+
+.problem-group { padding-bottom: 4px; }
+.group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 16px;
+  background: transparent;
+  border: none;
+  border-top: 1px solid #262626;
+  color: #bbb;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  text-align: left;
+}
+.group-header:hover { background: #232323; }
+.group-label { flex: 1; }
+.group-count {
+  font-family: ui-monospace, monospace;
+  color: #888;
+  font-weight: 400;
+}
+.problem .rule-id.offset { color: #888; }
+
+/* Score badge — grade + tooltip */
+.grade-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  margin-left: 4px;
+}
+.grade-label.grade-good { color: #6c6; background: #1a2a1a; }
+.grade-label.grade-ok   { color: #dc9; background: #2a2418; }
+.grade-label.grade-bad  { color: #e77; background: #2a1818; }
+.score-badge { cursor: help; }

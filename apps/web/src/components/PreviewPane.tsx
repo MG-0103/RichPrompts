@@ -3,8 +3,37 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
 import rehypeHighlight from 'rehype-highlight'
-import type { DocType } from '@richprompt/core'
+import { classifyCanonical, type DocType } from '@richprompt/core'
 import 'highlight.js/styles/github-dark.css'
+
+function extractHeadingText(children: React.ReactNode): string {
+  if (typeof children === 'string') return children
+  if (Array.isArray(children)) return children.map(extractHeadingText).join('')
+  if (children && typeof children === 'object' && 'props' in children) {
+    return extractHeadingText((children as { props: { children: React.ReactNode } }).props.children)
+  }
+  return ''
+}
+
+function renderHeading(Tag: 'h1' | 'h2' | 'h3' | 'h4', props: { children?: React.ReactNode }) {
+  const text = extractHeadingText(props.children ?? '')
+  const canonical = classifyCanonical(text)
+  return (
+    <Tag>
+      {canonical && (
+        <span className={`section-badge sb-${canonical}`}>{canonical}</span>
+      )}
+      {props.children}
+    </Tag>
+  )
+}
+
+const MD_COMPONENTS = {
+  h1: (p: { children?: React.ReactNode }) => renderHeading('h1', p),
+  h2: (p: { children?: React.ReactNode }) => renderHeading('h2', p),
+  h3: (p: { children?: React.ReactNode }) => renderHeading('h3', p),
+  h4: (p: { children?: React.ReactNode }) => renderHeading('h4', p),
+}
 
 type Props = {
   source: string
@@ -109,6 +138,7 @@ export const PreviewPane = forwardRef<HTMLDivElement, Props>(function PreviewPan
         <ReactMarkdown
           remarkPlugins={[remarkGfm]}
           rehypePlugins={[rehypeSanitize, rehypeHighlight]}
+          components={MD_COMPONENTS}
         >
           {source}
         </ReactMarkdown>

@@ -1,6 +1,7 @@
 export type DocType = 'prompt' | 'tool' | 'skill'
 export type Severity = 'error' | 'warn' | 'info'
 export type SectionKind = 'heading' | 'xml' | 'frontmatter' | 'body'
+export type CanonicalSection = 'role' | 'task' | 'output' | 'constraints'
 
 export interface Section {
   kind: SectionKind
@@ -8,6 +9,7 @@ export interface Section {
   text: string
   startOffset: number
   endOffset: number
+  canonical?: CanonicalSection
 }
 
 export interface ParsedDoc {
