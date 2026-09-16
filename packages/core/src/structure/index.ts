@@ -2,6 +2,7 @@ import { parseDocument } from '../parser'
 import type { CanonicalSection, DocType } from '../types'
 import { budgetFor, estimateTokens } from './budget'
 import { detectDuplicationClusters, type DuplicationOptions } from './duplication'
+import { detectExtractionCandidates } from './extract'
 import { detectNoise } from './noise'
 import { splitParagraphs } from './paragraph'
 import type { SectionStats, StructureReport } from './types'
@@ -13,6 +14,8 @@ export { detectNoise } from './noise'
 export type { NoiseFlag, NoiseKind } from './noise'
 export { detectDuplicationClusters, adviceFor } from './duplication'
 export type { DuplicationCluster, DuplicationOptions } from './duplication'
+export { detectExtractionCandidates } from './extract'
+export type { ExtractionCandidate, ExtractionTarget } from './extract'
 
 export interface AnalyzeOptions {
   model?: string
@@ -67,6 +70,7 @@ export function analyzeStructure(
   const model = opts.model ?? 'gemini-2.5-flash'
   const noise = detectNoise(raw, doc.sections)
   const duplicationClusters = detectDuplicationClusters(paragraphs, opts.duplication)
+  const extractionCandidates = detectExtractionCandidates(paragraphs)
 
   return {
     chars: raw.length,
@@ -76,6 +80,7 @@ export function analyzeStructure(
     budget: budgetFor(raw.length, model),
     noise,
     duplicationClusters,
+    extractionCandidates,
   }
 }
 

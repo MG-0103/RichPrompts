@@ -3,6 +3,7 @@ import {
   analyzeStructure,
   budgetFor,
   detectDuplicationClusters,
+  detectExtractionCandidates,
   detectNoise,
   estimateTokens,
   splitParagraphs,
@@ -138,6 +139,68 @@ describe('detectDuplicationClusters', () => {
     const clusters = detectDuplicationClusters(paragraphs, { threshold: 0.35 })
     const cross = clusters.find(c => c.crossSection)
     expect(cross).toBeDefined()
+  })
+})
+
+describe('detectExtractionCandidates', () => {
+  it('flags a schema candidate when a response-format heading has JSON body', () => {
+    const raw = [
+      '# Response format',
+      '',
+      'The output must be a JSON object with these keys:',
+      '```json',
+      '{ "kind": "string", "message": "string", "followups": [] }',
+      '```',
+    ].join('\n')
+    const parsed = parseDocument(raw, 'prompt')
+    const paragraphs = splitParagraphs(raw, parsed.sections)
+    const candidates = detectExtractionCandidates(paragraphs)
+    const schema = candidates.find(c => c.target === 'schema')
+    expect(schema).toBeDefined()
+    expect(schema!.confidence).toBeGreaterThanOrEqual(0.75)
+    expect(schema!.extractedSnippet).toMatch(/kind/)
+  })
+
+  it('flags a tool candidate for a numbered procedure with 3+ steps', () => {
+    const raw = [
+      'How to compute the invoice total:',
+      '1. Fetch the line items for the invoice.',
+      '2. Calculate the subtotal by summing line item costs.',
+      '3. Apply tax and return the final total.',
+    ].join('\n')
+    const parsed = parseDocument(raw, 'prompt')
+    const paragraphs = splitParagraphs(raw, parsed.sections)
+    const candidates = detectExtractionCandidates(paragraphs)
+    const tool = candidates.find(c => c.target === 'tool')
+    expect(tool).toBeDefined()
+    // Deterministic verbs raise confidence
+    expect(tool!.confidence).toBeGreaterThanOrEqual(0.8)
+    expect(tool!.extractedSnippet).toMatch(/"name"/)
+  })
+
+  it('flags a skill candidate for IF-block + imperative follow-ups', () => {
+    const raw = [
+      'If the user asks about billing, do the following steps carefully:',
+      'Look up the account details for the customer identifier.',
+      'Check the subscription tier and current plan status.',
+      'Respond with a summary of the tier and next billing date.',
+    ].join('\n')
+    const parsed = parseDocument(raw, 'prompt')
+    const paragraphs = splitParagraphs(raw, parsed.sections)
+    const candidates = detectExtractionCandidates(paragraphs)
+    const skill = candidates.find(c => c.target === 'skill')
+    expect(skill).toBeDefined()
+    expect(skill!.extractedSnippet).toMatch(/name: extracted-skill/)
+  })
+
+  it('returns no candidates for plain prose without procedural or IF patterns', () => {
+    const raw =
+      'You are a general-purpose assistant. Respond in a friendly tone.\n' +
+      'Do not disclose personal information unless the user asks first.'
+    const parsed = parseDocument(raw, 'prompt')
+    const paragraphs = splitParagraphs(raw, parsed.sections)
+    const candidates = detectExtractionCandidates(paragraphs)
+    expect(candidates).toHaveLength(0)
   })
 })
 

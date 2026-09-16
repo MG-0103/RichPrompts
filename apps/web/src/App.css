@@ -1325,6 +1325,15 @@ body.splitter-dragging .preview-col { pointer-events: none; }
 }
 .finding-badge.dup { color: #dc9; background: #2a2418; }
 .finding-badge.noise { color: #b9c; background: #2a1a2a; }
+.finding-badge.extract.target-schema { color: #9a6ad9; background: #241a2a; }
+.finding-badge.extract.target-tool   { color: #7cf;    background: #182432; }
+.finding-badge.extract.target-skill  { color: #5ab671; background: #182a1e; }
+.extract-confidence {
+  font-family: ui-monospace, monospace;
+  font-size: 10px;
+  color: #888;
+  min-width: 30px;
+}
 .finding-similarity {
   font-family: ui-monospace, monospace;
   font-size: 11px;

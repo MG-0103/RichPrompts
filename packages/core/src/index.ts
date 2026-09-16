@@ -52,6 +52,7 @@ export {
   splitParagraphs,
   detectNoise,
   detectDuplicationClusters,
+  detectExtractionCandidates,
   adviceFor,
 } from './structure'
 export type {
@@ -64,6 +65,8 @@ export type {
   NoiseKind,
   DuplicationCluster,
   DuplicationOptions,
+  ExtractionCandidate,
+  ExtractionTarget,
 } from './structure'
 
 import { parseDocument } from './parser'
