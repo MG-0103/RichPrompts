@@ -52,6 +52,7 @@ export {
   splitParagraphs,
   detectNoise,
   detectDuplicationClusters,
+  analyzeDuplication,
   detectExtractionCandidates,
   adviceFor,
 } from './structure'
@@ -64,6 +65,8 @@ export type {
   NoiseFlag,
   NoiseKind,
   DuplicationCluster,
+  DuplicationEdge,
+  DuplicationAnalysis,
   DuplicationOptions,
   ExtractionCandidate,
   ExtractionTarget,

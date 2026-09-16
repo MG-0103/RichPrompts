@@ -1334,6 +1334,70 @@ body.splitter-dragging .preview-col { pointer-events: none; }
   color: #888;
   min-width: 30px;
 }
+
+/* Duplication view toggle + graph */
+.structure-block-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.view-toggle {
+  margin-left: auto;
+  display: flex;
+  gap: 0;
+  border: 1px solid #333;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.view-toggle .vt {
+  font-size: 10px;
+  padding: 2px 8px;
+  background: #232323;
+  color: #999;
+  border: none;
+  border-right: 1px solid #333;
+  cursor: pointer;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.view-toggle .vt:last-child { border-right: none; }
+.view-toggle .vt.active { background: #094771; color: #fff; }
+
+.dup-graph-wrap {
+  border: 1px solid #262626;
+  background: #161616;
+  border-radius: 4px;
+  padding: 8px 4px 4px;
+  margin-top: 4px;
+}
+.dup-graph {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+.dup-node {
+  cursor: pointer;
+  transition: transform 0.05s;
+}
+.dup-node:hover { transform: scale(1.15); }
+.dup-graph-empty {
+  padding: 24px 12px;
+  color: #666;
+  font-size: 12px;
+  font-style: italic;
+  text-align: center;
+}
+.dup-graph-legend {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 2px;
+  font-size: 11px;
+  color: #999;
+}
+.legend-swatches { display: flex; gap: 10px; }
+.lgs { display: inline-flex; align-items: center; gap: 4px; text-transform: capitalize; }
+.lgs-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .finding-similarity {
   font-family: ui-monospace, monospace;
   font-size: 11px;

@@ -44,5 +44,6 @@ export interface StructureReport {
   budget: BudgetInfo
   noise: import('./noise').NoiseFlag[]
   duplicationClusters: import('./duplication').DuplicationCluster[]
+  duplicationEdges: import('./duplication').DuplicationEdge[]
   extractionCandidates: import('./extract').ExtractionCandidate[]
 }

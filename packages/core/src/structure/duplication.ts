@@ -14,6 +14,18 @@ export interface DuplicationCluster {
   preview: string
 }
 
+export interface DuplicationEdge {
+  from: string  // paragraph id
+  to: string    // paragraph id
+  similarity: number
+  clusterId: string
+}
+
+export interface DuplicationAnalysis {
+  clusters: DuplicationCluster[]
+  edges: DuplicationEdge[]
+}
+
 export interface DuplicationOptions {
   /** Jaccard threshold above which pairs are considered similar. */
   threshold?: number
@@ -25,21 +37,22 @@ export interface DuplicationOptions {
 }
 
 /**
- * Cluster near-duplicate paragraphs using trigram Jaccard.
+ * Cluster near-duplicate paragraphs using trigram Jaccard, plus the
+ * pairwise edges that produced those clusters (for graph rendering).
  * O(n²) in paragraph count; capped at maxParagraphs for safety.
- * Returns clusters sorted by (total_chars × mean_similarity) desc so
- * the highest-value merges surface first.
  */
-export function detectDuplicationClusters(
+export function analyzeDuplication(
   paragraphs: Paragraph[],
   opts: DuplicationOptions = {},
-): DuplicationCluster[] {
+): DuplicationAnalysis {
   const threshold = opts.threshold ?? 0.5
   const minChars = opts.minChars ?? 60
   const maxParagraphs = opts.maxParagraphs ?? 250
 
   const eligible = paragraphs.filter(p => p.text.trim().length >= minChars)
-  if (eligible.length < 2 || eligible.length > maxParagraphs) return []
+  if (eligible.length < 2 || eligible.length > maxParagraphs) {
+    return { clusters: [], edges: [] }
+  }
 
   // Cache trigram sets per paragraph
   const trigramCache = new Map<string, Set<string>>()
@@ -128,7 +141,31 @@ export function detectDuplicationClusters(
 
   // Rank: high total × mean-sim first — biggest merge value at the top
   out.sort((a, b) => (b.totalChars * b.similarity) - (a.totalChars * a.similarity))
-  return out
+
+  // Build edges list — one entry per (root, memberA, memberB) with the
+  // recorded similarity. Assign each edge to its cluster id.
+  const clusterByRoot = new Map<string, string>()
+  for (const c of out) {
+    const root = find(c.paragraphIds[0])
+    clusterByRoot.set(root, c.id)
+  }
+  const edges: DuplicationEdge[] = []
+  for (const [key, sim] of pairSims) {
+    const [a, b] = key.split('|')
+    const clusterId = clusterByRoot.get(find(a))
+    if (!clusterId) continue
+    edges.push({ from: a, to: b, similarity: sim, clusterId })
+  }
+
+  return { clusters: out, edges }
+}
+
+/** Back-compat: only clusters, no edges. */
+export function detectDuplicationClusters(
+  paragraphs: Paragraph[],
+  opts: DuplicationOptions = {},
+): DuplicationCluster[] {
+  return analyzeDuplication(paragraphs, opts).clusters
 }
 
 /**

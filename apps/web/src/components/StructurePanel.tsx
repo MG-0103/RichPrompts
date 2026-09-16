@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import {
   adviceFor,
   type CanonicalSection,
   type DuplicationCluster,
+  type DuplicationEdge,
   type ExtractionCandidate,
   type ExtractionTarget,
   type NoiseFlag,
@@ -10,6 +11,11 @@ import {
   type Paragraph,
   type StructureReport,
 } from '@richprompt/core'
+
+// Lazy — pulls d3-force + the graph module in a chunk only on first render.
+const DuplicationGraph = lazy(() =>
+  import('./DuplicationGraph').then(m => ({ default: m.DuplicationGraph })),
+)
 
 interface Props {
   report: StructureReport
@@ -49,7 +55,7 @@ export function StructurePanel({
 }: Props) {
   const {
     budget, sections, chars, approxTokens,
-    duplicationClusters, noise, extractionCandidates, paragraphs,
+    duplicationClusters, duplicationEdges, noise, extractionCandidates, paragraphs,
   } = report
   const paragraphById = useMemo(() => {
     const m = new Map<string, Paragraph>()
@@ -79,8 +85,9 @@ export function StructurePanel({
       <BudgetBar budget={budget} chars={chars} approxTokens={approxTokens} />
       <SectionStack sections={sections} totalChars={chars} onJump={onJump} />
       <SectionList sections={sections} onJump={onJump} />
-      <DuplicationList
+      <DuplicationSection
         clusters={activeDups}
+        edges={duplicationEdges}
         paragraphById={paragraphById}
         paragraphs={paragraphs}
         onJump={onJump}
@@ -314,7 +321,78 @@ function StatusStrip({
   )
 }
 
-function DuplicationList({
+function DuplicationSection({
+  clusters,
+  edges,
+  paragraphById,
+  paragraphs,
+  onJump,
+  onDismiss,
+}: {
+  clusters: DuplicationCluster[]
+  edges: DuplicationEdge[]
+  paragraphById: Map<string, Paragraph>
+  paragraphs: Paragraph[]
+  onJump: (offset: number) => void
+  onDismiss: (id: string) => void
+}) {
+  const [view, setView] = useState<'list' | 'graph'>(() => {
+    try { return (localStorage.getItem('richprompt.dup.view') as 'list' | 'graph') || 'list' } catch { return 'list' }
+  })
+  const toggleView = (v: 'list' | 'graph') => {
+    setView(v)
+    try { localStorage.setItem('richprompt.dup.view', v) } catch { /* ignore */ }
+  }
+  const activeEdges = useMemo(() => {
+    const active = new Set(clusters.map(c => c.id))
+    return edges.filter(e => active.has(e.clusterId))
+  }, [clusters, edges])
+  if (clusters.length === 0) {
+    return (
+      <div className="structure-block">
+        <div className="structure-block-title">Duplication</div>
+        <div className="structure-empty">No near-duplicate paragraphs above the threshold.</div>
+      </div>
+    )
+  }
+  return (
+    <div className="structure-block">
+      <div className="structure-block-title">
+        Duplication <span className="count">{clusters.length}</span>
+        <div className="view-toggle">
+          <button
+            className={`vt ${view === 'list' ? 'active' : ''}`}
+            onClick={() => toggleView('list')}
+          >list</button>
+          <button
+            className={`vt ${view === 'graph' ? 'active' : ''}`}
+            onClick={() => toggleView('graph')}
+          >graph</button>
+        </div>
+      </div>
+      {view === 'graph' ? (
+        <Suspense fallback={<div className="dup-graph-empty">Loading graph…</div>}>
+          <DuplicationGraph
+            clusters={clusters}
+            edges={activeEdges}
+            paragraphs={paragraphs}
+            onJumpTo={onJump}
+          />
+        </Suspense>
+      ) : (
+        <DuplicationListInner
+          clusters={clusters}
+          paragraphById={paragraphById}
+          paragraphs={paragraphs}
+          onJump={onJump}
+          onDismiss={onDismiss}
+        />
+      )}
+    </div>
+  )
+}
+
+function DuplicationListInner({
   clusters,
   paragraphById,
   paragraphs,
@@ -328,14 +406,6 @@ function DuplicationList({
   onDismiss: (id: string) => void
 }) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
-  if (clusters.length === 0) {
-    return (
-      <div className="structure-block">
-        <div className="structure-block-title">Duplication</div>
-        <div className="structure-empty">No near-duplicate paragraphs above the threshold.</div>
-      </div>
-    )
-  }
   const toggle = (id: string) =>
     setExpanded(prev => {
       const next = new Set(prev)
@@ -343,11 +413,7 @@ function DuplicationList({
       return next
     })
   return (
-    <div className="structure-block">
-      <div className="structure-block-title">
-        Duplication <span className="count">{clusters.length}</span>
-      </div>
-      <ul className="finding-list">
+    <ul className="finding-list">
         {clusters.map(c => {
           const open = expanded.has(c.id)
           const members = c.paragraphIds
@@ -403,7 +469,6 @@ function DuplicationList({
           )
         })}
       </ul>
-    </div>
   )
 }
 
