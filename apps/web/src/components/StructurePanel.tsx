@@ -15,6 +15,13 @@ interface Props {
   dismissed: Set<string>
   onToggleDismiss: (id: string) => void
   onClearDismissals: () => void
+  /** Current live source char count — for the stale banner. */
+  liveChars: number
+  loading: boolean
+  stale: boolean
+  manualMode: boolean
+  lastDurationMs: number
+  onReanalyze: () => void
 }
 
 const SECTION_COLORS: Record<CanonicalSection, string> = {
@@ -31,6 +38,12 @@ export function StructurePanel({
   dismissed,
   onToggleDismiss,
   onClearDismissals,
+  liveChars,
+  loading,
+  stale,
+  manualMode,
+  lastDurationMs,
+  onReanalyze,
 }: Props) {
   const { budget, sections, chars, approxTokens, duplicationClusters, noise, paragraphs } = report
   const paragraphById = useMemo(() => {
@@ -47,6 +60,15 @@ export function StructurePanel({
 
   return (
     <div className="structure-panel">
+      <StatusStrip
+        loading={loading}
+        stale={stale}
+        manualMode={manualMode}
+        liveChars={liveChars}
+        computedChars={chars}
+        lastDurationMs={lastDurationMs}
+        onReanalyze={onReanalyze}
+      />
       <BudgetBar budget={budget} chars={chars} approxTokens={approxTokens} />
       <SectionStack sections={sections} totalChars={chars} onJump={onJump} />
       <SectionList sections={sections} onJump={onJump} />
@@ -235,6 +257,49 @@ function labelFor(s: StructureReport['sections'][number]): string {
 
 function colorFor(canonical: CanonicalSection | undefined): string {
   return canonical ? SECTION_COLORS[canonical] : OTHER_COLOR
+}
+
+function StatusStrip({
+  loading,
+  stale,
+  manualMode,
+  liveChars,
+  computedChars,
+  lastDurationMs,
+  onReanalyze,
+}: {
+  loading: boolean
+  stale: boolean
+  manualMode: boolean
+  liveChars: number
+  computedChars: number
+  lastDurationMs: number
+  onReanalyze: () => void
+}) {
+  if (!loading && !stale && !manualMode) return null
+  return (
+    <div className={`structure-status ${loading ? 'busy' : stale ? 'stale' : 'idle'}`}>
+      {loading && <><span className="spinner" /> <span>Analyzing…</span></>}
+      {!loading && stale && (
+        <>
+          <span>
+            Doc changed since last analysis
+            {computedChars !== liveChars && (
+              <span className="dim"> · was {computedChars.toLocaleString()} chars, now {liveChars.toLocaleString()}</span>
+            )}
+          </span>
+        </>
+      )}
+      {!loading && !stale && manualMode && (
+        <span className="dim">
+          Manual mode (prompt &gt; 30k chars). Last analysis: {Math.round(lastDurationMs)}ms
+        </span>
+      )}
+      {!loading && (stale || manualMode) && (
+        <button className="rescan-btn" onClick={onReanalyze}>Re-analyze</button>
+      )}
+    </div>
+  )
 }
 
 function DuplicationList({

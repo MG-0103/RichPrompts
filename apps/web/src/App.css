@@ -1390,6 +1390,20 @@ body.splitter-dragging .preview-col { pointer-events: none; }
   white-space: nowrap;
 }
 
+.structure-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 16px;
+  font-size: 11px;
+  border-bottom: 1px solid #262626;
+}
+.structure-status.busy  { background: #1e2530; color: #9bd; }
+.structure-status.stale { background: #2a2418; color: #dc9; }
+.structure-status.idle  { background: #232323; color: #999; }
+.structure-status .rescan-btn { margin-left: auto; font-size: 10px; padding: 3px 8px; }
+.structure-status .dim { color: #888; }
+
 .dismissed-footer {
   padding: 10px 16px;
   border-top: 1px solid #262626;

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import Editor, { type Monaco } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
 import {
-  analyzeStructure,
   badPrompt,
   badTool,
   badSkill,
@@ -28,6 +27,7 @@ import { StructurePanel } from './components/StructurePanel'
 import { useRegistry } from './hooks/useRegistry'
 import { useScore } from './hooks/useScore'
 import { useLLMReview } from './hooks/useLLMReview'
+import { useStructure } from './hooks/useStructure'
 import { useTests } from './hooks/useTests'
 import { useVersioning } from './hooks/useVersioning'
 import { loadConfig, resetConfig, saveConfig } from './persistence/config'
@@ -83,13 +83,9 @@ function App() {
     setRunnerConfig(c)
     saveTestingConfig(c)
   }
-  // R1α: sections + budget only. Compute inline (main thread) for now;
-  // R1γ moves this into a Web Worker once we add duplication + noise.
-  const structureReport: StructureReport | null = useMemo(() => {
-    if (docType === 'tool') return null
-    return analyzeStructure(source, docType, { model: runnerConfig.model })
-  }, [source, docType, runnerConfig.model])
-  const isBigPrompt = structureReport ? structureReport.chars >= 5000 : false
+  const structure = useStructure(source, docType, runnerConfig.model)
+  const structureReport: StructureReport | null = structure.report
+  const isBigPrompt = source.length >= 5000 && docType !== 'tool'
   const structureHash = useMemo(() => `${docType}:${hashContent(source)}`, [docType, source])
   const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissals(structureHash))
   useEffect(() => { setDismissed(loadDismissals(structureHash)) }, [structureHash])
@@ -463,6 +459,12 @@ function App() {
               dismissed={dismissed}
               onToggleDismiss={onToggleDismiss}
               onClearDismissals={onClearDismissals}
+              liveChars={source.length}
+              loading={structure.loading}
+              stale={structure.stale}
+              manualMode={structure.manualMode}
+              lastDurationMs={structure.lastDurationMs}
+              onReanalyze={structure.reanalyze}
             />
           )}
           {bottomTab === 'history' && (
