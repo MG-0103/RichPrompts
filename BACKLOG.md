@@ -2,6 +2,88 @@
 
 Deferred ideas, revisit before shipping.
 
+## Strategic audit — reinvention risk & positioning
+
+Reflection during discussion: prior-art overlap wasn't researched before
+building, and several shipped features duplicate what mature products
+already do. Recording the audit here so it stays in view as we decide
+what to keep, cut, and double-down on.
+
+### Prior-art overlap (features that exist elsewhere)
+
+- **PromptLayer, Pezzo, Humanloop, PromptHub** — prompt versioning +
+  registry. Our Phase 9 (auto/commit history) is a smaller, worse
+  version.
+- **Braintrust, Promptfoo, LangSmith** — prompt/routing evals with
+  test suites. Our P10-P15 test runner is a reinvented subset.
+  Braintrust and Promptfoo are more mature; Promptfoo's YAML format
+  is an open de-facto standard.
+- **Langfuse, Helicone** — LLM observability + prompt management with
+  logging. We don't overlap here (no logging today) but adjacent.
+
+### What is genuinely differentiated (double-down)
+
+- **In-editor deterministic linter** (Monaco squiggles, hovers, rule
+  packs). None of the above lint prompt files this way. Core value.
+- **Tier-2 registry-wide overlap detection** (tool/skill trigger
+  collisions). Not a standard feature elsewhere.
+- **R1 Structure analysis** for large prompts (section map, duplication
+  clusters, extraction candidates, model-aware budget). Not standard.
+
+### What to reconsider
+
+- **Test runner (P10-P15).** Keep the local Python sidecar for
+  in-editor feedback. But add ingest for **Promptfoo's YAML format**
+  so users with existing Promptfoo test suites don't have to
+  re-author. Compete on "linter + routing signal", not on "eval
+  infrastructure."
+- **Versioning (P9).** localStorage version history is worse than
+  git. Consider: (a) keeping as a low-effort safety net, (b) advising
+  "use git" and killing it, or (c) shipping it as an *export* format
+  ("save this commit as a `.md` at path X") rather than a private store.
+- **LLM Review (P6).** Keep small or delete if unused. Overlaps
+  weakly with LLM-as-judge features in every eval tool.
+- **CI export (P18, unshipped).** Should ship as compatibility with
+  Promptfoo's CI pattern rather than a new one. Users who already run
+  Promptfoo in CI plug ours in via config, not via a second workflow.
+
+### Positioning principle: format-not-platform
+
+The trap: "integrate with X's SaaS." That creates subscription
+dependency, account requirements, and vendor lock — the exact opposite
+of what a local-first developer tool should do.
+
+The fix: **integrate with open file formats and protocols, not with
+platforms.** ESLint reads `.eslintrc`. TypeScript reads `tsconfig.json`.
+Prettier reads `.prettierrc`. Nobody signs up for anything.
+
+- Adopt: Promptfoo YAML, OpenAI function-calling schema (already do),
+  SKILL.md frontmatter (already do), OTEL spans for optional trace
+  export.
+- Do not require: accounts, remote APIs (beyond the user's own model
+  provider keys), hosted dashboards.
+
+### Concrete follow-up tasks
+
+- [ ] Audit each shipped phase against the differentiation check
+      above; mark KEEP / CUT / REWORK.
+- [ ] Add `.promptfoo.yaml` ingest to the test runner (Phase 16.x?).
+      Parse, run through the same sidecar path, surface the same
+      per-test metrics.
+- [ ] Decide fate of Phase 9 versioning: keep-as-is, kill, or export.
+- [ ] Re-scope Phase 18 CI export as a Promptfoo-compatible CLI
+      instead of a new format.
+
+### Lesson recorded
+
+For future features: **spend 30 minutes surveying prior art before
+building.** Naming existing tools and the specific gap our approach
+fills is cheap. Re-implementing eval infrastructure from scratch
+because we didn't check is not.
+
+---
+
+
 ## Phase 10 → 18 — Stub agent testing (routing-quality gate)
 
 **Goal:** for each edit to a prompt/tool/skill, verify the router still
@@ -87,6 +169,62 @@ sidecar owns anything model-touching. Contract in
 - **18 — CI export:** `@richprompt/testrunner-cli`; fail a PR on
   passRate regression. Companion GitHub Action.
 
+
+## Tests tab — node-graph playback view (NOT SHIPPED — design discussion)
+
+Idea (from discussion): add a graph-based playback view to the Tests
+tab alongside the existing table. One test at a time, agent as a
+center node, tools/skills as spokes, rollouts animated as "control
+tokens" flowing along the chosen edge. Debugging aid, not a scanner
+replacement.
+
+Source: React Flow (`@xyflow/react`, ~150 KB gzipped). We might reuse
+UI components from the `MG-0103/Agent_Builder` repo (client folder)
+rather than build the node/edge visuals from scratch — pending a
+look at that code.
+
+**Framing (locked): two views in the Tests tab, toggleable.**
+- Table view (default) — 30 tests, all metrics visible, fast
+  scanning. What we have.
+- Playback view (new) — pick one test → animated graph → play
+  through N rollouts. For debugging a specific failure.
+
+**Visual specifics under consideration:**
+- Nodes: agent (center), each tool/skill in the current registry
+  (spokes). Node color by kind (tool/skill/none).
+- Edges: light grey static baseline. Rollout picks the edge → it
+  animates + thickens + colors while the "control token" flows to
+  the target node.
+- Edge thickness after all rollouts complete = rollout count on
+  that path — visual analogue of the concentration metric.
+- Expected target node gets a subtle outline so misses are
+  visually obvious.
+- Optional: side-by-side full-descriptions vs. stripped-descriptions
+  playback when ablation is on. See where rollouts drift.
+
+**Uses data we already produce.** `TestResult.rollouts[].called`
+carries everything the graph needs. No sidecar changes required.
+
+**Where it helps:**
+- Debugging one failing test — visual is more intuitive than a
+  rollout table.
+- Concentration made visible (thick vs. scattered edges).
+- Cross-check to the ablation delta at a glance.
+
+**Where it doesn't help (why we keep the table):**
+- Suite-wide scanning — a 30-test graph is a mess.
+- Information density — a pretty edge loses the rollout error
+  string, latency-per-rollout, arg values. Keep the drill-down
+  table for facts.
+- "None" tests (expected: no call) have nothing to animate.
+
+**Est effort:** ~1–1.5 days once we have Agent_Builder's node UI
+as a starting point, or ~2 days from scratch.
+
+**Prerequisite:** review the Agent_Builder `client/` folder — adapt
+node/edge components, don't blind-copy.
+
+---
 
 ## Phase R1 — Structure panel for large prompts (NOT SHIPPED — design locked)
 
