@@ -6,6 +6,7 @@ import {
   badPrompt,
   badTool,
   badSkill,
+  hashContent,
   parseDocument,
   type Diagnostic,
   type DocType,
@@ -32,6 +33,7 @@ import { useVersioning } from './hooks/useVersioning'
 import { loadConfig, resetConfig, saveConfig } from './persistence/config'
 import { loadTestingConfig, saveTestingConfig } from './persistence/testConfig'
 import { addPin, loadPins, removePin, type RegistryPin } from './persistence/pins'
+import { clearDismissals, loadDismissals, toggleDismissal } from './persistence/dismissals'
 import { callTargets } from './testing/registry'
 import { sampleRegistryTools, sampleRegistrySkills } from '@richprompt/core'
 import type { RuleConfig } from '@richprompt/core'
@@ -88,6 +90,11 @@ function App() {
     return analyzeStructure(source, docType, { model: runnerConfig.model })
   }, [source, docType, runnerConfig.model])
   const isBigPrompt = structureReport ? structureReport.chars >= 5000 : false
+  const structureHash = useMemo(() => `${docType}:${hashContent(source)}`, [docType, source])
+  const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissals(structureHash))
+  useEffect(() => { setDismissed(loadDismissals(structureHash)) }, [structureHash])
+  const onToggleDismiss = (id: string) => setDismissed(toggleDismissal(structureHash, id))
+  const onClearDismissals = () => { clearDismissals(structureHash); setDismissed(new Set()) }
   const targets = useMemo(
     () => callTargets(sampleRegistryTools, sampleRegistrySkills),
     [],
@@ -453,6 +460,9 @@ function App() {
                 ed.setSelection(r)
                 ed.focus()
               }}
+              dismissed={dismissed}
+              onToggleDismiss={onToggleDismiss}
+              onClearDismissals={onClearDismissals}
             />
           )}
           {bottomTab === 'history' && (

@@ -50,6 +50,9 @@ export {
   budgetFor,
   estimateTokens,
   splitParagraphs,
+  detectNoise,
+  detectDuplicationClusters,
+  adviceFor,
 } from './structure'
 export type {
   AnalyzeOptions,
@@ -57,6 +60,10 @@ export type {
   Paragraph,
   SectionStats,
   StructureReport,
+  NoiseFlag,
+  NoiseKind,
+  DuplicationCluster,
+  DuplicationOptions,
 } from './structure'
 
 import { parseDocument } from './parser'

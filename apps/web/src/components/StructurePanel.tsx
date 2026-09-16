@@ -1,8 +1,20 @@
-import type { CanonicalSection, StructureReport } from '@richprompt/core'
+import { useMemo, useState } from 'react'
+import {
+  adviceFor,
+  type CanonicalSection,
+  type DuplicationCluster,
+  type NoiseFlag,
+  type NoiseKind,
+  type Paragraph,
+  type StructureReport,
+} from '@richprompt/core'
 
 interface Props {
   report: StructureReport
   onJump: (offset: number) => void
+  dismissed: Set<string>
+  onToggleDismiss: (id: string) => void
+  onClearDismissals: () => void
 }
 
 const SECTION_COLORS: Record<CanonicalSection, string> = {
@@ -13,13 +25,49 @@ const SECTION_COLORS: Record<CanonicalSection, string> = {
 }
 const OTHER_COLOR = '#555'
 
-export function StructurePanel({ report, onJump }: Props) {
-  const { budget, sections, chars, approxTokens } = report
+export function StructurePanel({
+  report,
+  onJump,
+  dismissed,
+  onToggleDismiss,
+  onClearDismissals,
+}: Props) {
+  const { budget, sections, chars, approxTokens, duplicationClusters, noise, paragraphs } = report
+  const paragraphById = useMemo(() => {
+    const m = new Map<string, Paragraph>()
+    for (const p of paragraphs) m.set(p.id, p)
+    return m
+  }, [paragraphs])
+
+  const activeDups = duplicationClusters.filter(c => !dismissed.has(c.id))
+  const activeNoise = noise.filter(n => !dismissed.has(n.id))
+  const dismissedCount =
+    duplicationClusters.filter(c => dismissed.has(c.id)).length +
+    noise.filter(n => dismissed.has(n.id)).length
+
   return (
     <div className="structure-panel">
       <BudgetBar budget={budget} chars={chars} approxTokens={approxTokens} />
       <SectionStack sections={sections} totalChars={chars} onJump={onJump} />
       <SectionList sections={sections} onJump={onJump} />
+      <DuplicationList
+        clusters={activeDups}
+        paragraphById={paragraphById}
+        paragraphs={paragraphs}
+        onJump={onJump}
+        onDismiss={onToggleDismiss}
+      />
+      <NoiseList
+        flags={activeNoise}
+        onJump={onJump}
+        onDismiss={onToggleDismiss}
+      />
+      {dismissedCount > 0 && (
+        <div className="dismissed-footer">
+          {dismissedCount} finding{dismissedCount === 1 ? '' : 's'} dismissed for this doc version.{' '}
+          <button className="link-btn" onClick={onClearDismissals}>Restore all</button>
+        </div>
+      )}
     </div>
   )
 }
@@ -187,4 +235,159 @@ function labelFor(s: StructureReport['sections'][number]): string {
 
 function colorFor(canonical: CanonicalSection | undefined): string {
   return canonical ? SECTION_COLORS[canonical] : OTHER_COLOR
+}
+
+function DuplicationList({
+  clusters,
+  paragraphById,
+  paragraphs,
+  onJump,
+  onDismiss,
+}: {
+  clusters: DuplicationCluster[]
+  paragraphById: Map<string, Paragraph>
+  paragraphs: Paragraph[]
+  onJump: (offset: number) => void
+  onDismiss: (id: string) => void
+}) {
+  const [expanded, setExpanded] = useState<Set<string>>(new Set())
+  if (clusters.length === 0) {
+    return (
+      <div className="structure-block">
+        <div className="structure-block-title">Duplication</div>
+        <div className="structure-empty">No near-duplicate paragraphs above the threshold.</div>
+      </div>
+    )
+  }
+  const toggle = (id: string) =>
+    setExpanded(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id); else next.add(id)
+      return next
+    })
+  return (
+    <div className="structure-block">
+      <div className="structure-block-title">
+        Duplication <span className="count">{clusters.length}</span>
+      </div>
+      <ul className="finding-list">
+        {clusters.map(c => {
+          const open = expanded.has(c.id)
+          const members = c.paragraphIds
+            .map(id => paragraphById.get(id))
+            .filter((p): p is Paragraph => !!p)
+          return (
+            <li key={c.id} className="finding-row">
+              <button
+                className="finding-header"
+                onClick={() => toggle(c.id)}
+                aria-expanded={open}
+              >
+                <span className={`chev ${open ? 'open' : ''}`}>▸</span>
+                <span className="finding-badge dup">{c.paragraphIds.length}×</span>
+                <span className="finding-similarity">{Math.round(c.similarity * 100)}%</span>
+                <span className="finding-message">{adviceFor(c, paragraphs)}</span>
+                <span className="finding-actions" onClick={e => e.stopPropagation()}>
+                  <button
+                    className="link-btn"
+                    onClick={() => onJump(members[0].startOffset)}
+                  >
+                    jump
+                  </button>
+                  <button
+                    className="link-btn"
+                    onClick={() => onDismiss(c.id)}
+                    title="Hide this cluster for the current doc version"
+                  >
+                    dismiss
+                  </button>
+                </span>
+              </button>
+              {open && (
+                <ul className="finding-members">
+                  {members.map(p => (
+                    <li key={p.id}>
+                      <button
+                        className="member-btn"
+                        onClick={() => onJump(p.startOffset)}
+                      >
+                        <span className="member-loc">@{p.startOffset}</span>
+                        {p.section && <span className={`member-sec sb-${p.section}`}>{p.section}</span>}
+                        <span className="member-text">
+                          {p.text.trim().slice(0, 140).replace(/\n/g, ' ↩ ')}
+                          {p.text.length > 140 ? '…' : ''}
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </li>
+          )
+        })}
+      </ul>
+    </div>
+  )
+}
+
+const NOISE_LABELS: Record<NoiseKind, string> = {
+  'html-comment':    'HTML comment',
+  'author-marker':   'author marker',
+  'placeholder':     'placeholder',
+  'empty-xml-tag':   'empty tag',
+  'blank-run':       'blank run',
+  'boilerplate-tail':'boilerplate',
+}
+
+function NoiseList({
+  flags,
+  onJump,
+  onDismiss,
+}: {
+  flags: NoiseFlag[]
+  onJump: (offset: number) => void
+  onDismiss: (id: string) => void
+}) {
+  if (flags.length === 0) {
+    return (
+      <div className="structure-block">
+        <div className="structure-block-title">Noise</div>
+        <div className="structure-empty">No noise flags — nice and tidy.</div>
+      </div>
+    )
+  }
+  return (
+    <div className="structure-block">
+      <div className="structure-block-title">
+        Noise <span className="count">{flags.length}</span>
+      </div>
+      <ul className="finding-list">
+        {flags.map(f => (
+          <li key={f.id} className="finding-row">
+            <div className="finding-header static">
+              <span className={`finding-badge noise noise-${f.kind}`}>{NOISE_LABELS[f.kind]}</span>
+              <span className="finding-message">
+                <strong>{f.message}</strong>
+                <span className="finding-hint"> · {f.suggestion}</span>
+              </span>
+              <span className="finding-actions">
+                <button
+                  className="link-btn"
+                  onClick={() => onJump(f.range.startOffset)}
+                >
+                  jump
+                </button>
+                <button
+                  className="link-btn"
+                  onClick={() => onDismiss(f.id)}
+                >
+                  dismiss
+                </button>
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
 }

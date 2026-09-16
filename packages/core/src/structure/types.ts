@@ -42,4 +42,6 @@ export interface StructureReport {
   paragraphs: Paragraph[]
   sections: SectionStats[]
   budget: BudgetInfo
+  noise: import('./noise').NoiseFlag[]
+  duplicationClusters: import('./duplication').DuplicationCluster[]
 }

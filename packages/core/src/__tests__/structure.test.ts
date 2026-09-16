@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest'
-import { analyzeStructure, budgetFor, estimateTokens, splitParagraphs } from '../structure'
+import {
+  analyzeStructure,
+  budgetFor,
+  detectDuplicationClusters,
+  detectNoise,
+  estimateTokens,
+  splitParagraphs,
+} from '../structure'
 import { parseDocument } from '../parser'
 
 describe('estimateTokens', () => {
@@ -43,6 +50,94 @@ describe('splitParagraphs', () => {
     const task = ps.find(p => p.text.includes('Answer'))
     expect(role?.section).toBe('role')
     expect(task?.section).toBe('task')
+  })
+})
+
+describe('detectNoise', () => {
+  it('flags HTML comments, author markers, placeholders, empty tags, blank runs', () => {
+    const raw = [
+      '<!-- author note about revision -->',
+      'TODO: come back to this later',
+      'The value is [REDACTED] currently.',
+      '<x></x>',
+      '',
+      '',
+      '',
+      'more content',
+    ].join('\n')
+    const flags = detectNoise(raw, [])
+    const kinds = new Set(flags.map(f => f.kind))
+    expect(kinds.has('html-comment')).toBe(true)
+    expect(kinds.has('author-marker')).toBe(true)
+    expect(kinds.has('placeholder')).toBe(true)
+    expect(kinds.has('empty-xml-tag')).toBe(true)
+    expect(kinds.has('blank-run')).toBe(true)
+  })
+
+  it('flags a boilerplate tail when a Role section is already present', () => {
+    const raw = '# Role\n\nYou are an expert code reviewer.\n\n' +
+      'Do the analysis.\n\n' +
+      'You are a helpful assistant. Be polite.'
+    const parsed = parseDocument(raw, 'prompt')
+    const flags = detectNoise(raw, parsed.sections)
+    const boilerplate = flags.find(f => f.kind === 'boilerplate-tail')
+    expect(boilerplate).toBeDefined()
+    expect(boilerplate!.message).toMatch(/helpful assistant/i)
+  })
+
+  it('does NOT double-fire on overlapping matches (author marker inside HTML comment)', () => {
+    const raw = '<!-- TODO: fix later -->'
+    const flags = detectNoise(raw, [])
+    // Only the outer html-comment should survive de-dupe
+    expect(flags.filter(f => f.kind === 'html-comment')).toHaveLength(1)
+    expect(flags.filter(f => f.kind === 'author-marker')).toHaveLength(0)
+  })
+})
+
+describe('detectDuplicationClusters', () => {
+  it('finds a cluster of two near-verbatim paragraphs', () => {
+    const raw = [
+      'Always respond in JSON. Never use markdown. If the user asks a question, answer directly.',
+      '',
+      'Some other unrelated content about cats and dogs and the weather report.',
+      '',
+      'Always answer in JSON. Never use markdown formatting. If asked a question, answer directly.',
+    ].join('\n')
+    const parsed = parseDocument(raw, 'prompt')
+    const paragraphs = splitParagraphs(raw, parsed.sections)
+    const clusters = detectDuplicationClusters(paragraphs)
+    expect(clusters.length).toBeGreaterThanOrEqual(1)
+    expect(clusters[0].paragraphIds.length).toBeGreaterThanOrEqual(2)
+    expect(clusters[0].similarity).toBeGreaterThan(0.5)
+  })
+
+  it('returns no clusters when all paragraphs are unique', () => {
+    const raw = [
+      'The mitochondria is the powerhouse of the cell.',
+      '',
+      'Please always list the ingredients before writing the recipe.',
+      '',
+      'Refuse to answer questions about proprietary financial data.',
+    ].join('\n')
+    const parsed = parseDocument(raw, 'prompt')
+    const paragraphs = splitParagraphs(raw, parsed.sections)
+    const clusters = detectDuplicationClusters(paragraphs)
+    expect(clusters).toHaveLength(0)
+  })
+
+  it('marks clusters as crossSection when members span canonical sections', () => {
+    const raw = [
+      '# Task',
+      'Always respond in JSON with keys kind, message, and followups.',
+      '',
+      '# Constraints',
+      'Always respond in JSON. Include kind, message, and followups.',
+    ].join('\n')
+    const parsed = parseDocument(raw, 'prompt')
+    const paragraphs = splitParagraphs(raw, parsed.sections)
+    const clusters = detectDuplicationClusters(paragraphs, { threshold: 0.35 })
+    const cross = clusters.find(c => c.crossSection)
+    expect(cross).toBeDefined()
   })
 })
 
