@@ -88,6 +88,153 @@ sidecar owns anything model-touching. Contract in
   passRate regression. Companion GitHub Action.
 
 
+## Phase R1 — Structure panel for large prompts (NOT SHIPPED — design locked)
+
+**The problem it addresses.** Static rules are the wrong tool at scale.
+For a prompt > 15k chars, listing 300 diagnostics is worse than useless
+— authors need a strategic view: "what shape is my prompt in, what
+duplicates what, what can I extract, what's dead weight." R1 answers
+that with deterministic analysis + graph-driven duplication view.
+
+### Design locked
+
+**UI shape**
+- New "Structure" bottom tab. Red dot when current prompt > 5k (no
+  hijack — auto-focus off).
+- Sections stacked bar (char + token proportions) colored by
+  canonical role.
+- Model-budget bar: driven by whatever model is set in Tests config.
+  `chars / 4` token estimate with "approx" caveat in tooltip.
+- Three grouped finding sections: **Duplication**, **Noise**,
+  **Extraction candidates**.
+
+**Paragraph unit**
+- Blank-line-delimited block, respecting heading and XML boundaries.
+- Fenced code blocks stay whole. Numbered lists stay whole.
+- Typical: 200–2000 chars per block, ~50–200 per 85k prompt.
+
+**Duplication — two-tier**
+- Default: trigram Jaccard (existing similarity infra).
+  Threshold 0.5 (Recommended default; configurable).
+- "Deep analyze" button: OpenAI `text-embedding-3-small` embeddings
+  via a new sidecar `/embed` endpoint. Cosine matrix, threshold ~0.7.
+  Per-paragraph cache keyed by content hash — edits only re-embed
+  changed paragraphs.
+- Cost math: 85k prompt ≈ 21k tokens → $0.0004 per full deep pass.
+  Negligible.
+
+**Graph visualization (d3-force)**
+- Nodes = paragraphs. Size = char count. Color = canonical section.
+- Edges above similarity threshold. Thickness = strength.
+- Isolated nodes (no edges) shown greyed out — represent unique
+  work; safe-to-keep list.
+- Interactions: hover → tooltip + cluster highlight; click → jump
+  to editor; drag → repel; min-similarity slider.
+- ~30 KB gzipped, dynamic-imported when Structure tab first opens.
+
+**Cluster advice — templated**
+- "N paragraphs in {section} share X% similarity. Common theme: {…}.
+  Merge saves ~Y chars."
+- "Paragraph in {sectionA} is X% similar to one in {sectionB} —
+  instruction leaked across sections."
+- "Cluster of N paragraphs spans {sections} — suggests a dedicated
+  {theme} section would consolidate."
+
+**Noise flags (deterministic)**
+- HTML comments (`<!-- -->`)
+- Author markers (TODO / FIXME / XXX / HACK)
+- Placeholder tokens (`[REDACTED]`, `[PLACEHOLDER]`, `[TBD]`)
+- Empty XML tags
+- Excessive blank runs
+- Boilerplate tails: last 800 chars matched against a short phrase
+  list ("you are a helpful assistant", "be polite", "do not lie").
+  Only fired when in trailing region OR duplicative with an
+  earlier canonical Role section — cuts false positives.
+
+**Extraction candidates — balanced mode**
+- Schema: heading matches `response|output|json|format` + JSON-shaped
+  body. ~90% precision.
+- Tool: paragraph contains 3+ numbered procedure lines (imperative
+  verbs, deterministic operations). ~70% precision.
+- Skill: paragraph starts with `IF|WHEN|WHENEVER` + 2+ imperative
+  follow-up lines. ~60% precision. Explicitly labeled "candidates".
+- RAG-candidate and delete-candidate deferred to R2 (ablation)
+  and R3 (LLM-assisted classifier).
+- Copy-to-clipboard action for extracted target. File creation on
+  disk is P7 territory.
+
+**Runtime**
+- Web Worker off-thread. Debounced 3s idle up to 30k chars;
+  manual "Re-analyze" button beyond, with stale indicator.
+- O(n²) pairwise similarity on paragraphs: safe up to ~200
+  paragraphs; skip clusters if over.
+- Dismissed findings persisted per `(docHash, findingSignature)`
+  in localStorage so users don't re-see judged clusters.
+
+### Sidecar changes for OpenAI embeddings
+
+- New optional dep. Prefer `httpx` + direct REST over `openai` SDK
+  to keep deps minimal.
+- New endpoint `POST /embed`:
+  ```
+  request:  { texts: string[], model?: string }
+  response: { vectors: number[][], cached_count: int }
+  ```
+  Sanity-cap texts array length and per-text length.
+- Reads `OPENAI_API_KEY` from env. `/health` reports
+  `openai: { available, reason }` mirroring the `real` field.
+- Sidecar-side cache keyed by sha256(text + model), reusable
+  across paragraphs identical across docs.
+
+### File layout to build
+
+```
+packages/core/src/structure/
+  index.ts          analyzeStructure() entry
+  paragraph.ts      splitter
+  duplication.ts    trigram + cosine variants
+  noise.ts          deterministic detectors
+  extract.ts        candidate heuristics
+  budget.ts         model → practical token budget map
+  types.ts          Paragraph, DuplicationCluster, NoiseFlag,
+                    ExtractionCandidate, StructureReport
+
+apps/web/src/worker/
+  structure.worker.ts   receives raw + config, returns report
+
+apps/web/src/components/
+  StructurePanel.tsx    tab body
+  DuplicationGraph.tsx  d3-force visualization
+  SectionMap.tsx        stacked bar
+  ClusterList.tsx       fallback list view
+
+services/testrunner/app/
+  embed.py              OpenAI embeddings via httpx
+  main.py               /embed endpoint
+```
+
+### Estimated cost
+- `packages/core/src/structure/`: ~400 lines
+- Sidecar `/embed`: ~80 lines
+- Worker: ~50 lines
+- StructurePanel + graph + list: ~350 lines
+- Total: **~900 lines** + 1 browser dep (d3-force) + optional
+  httpx in sidecar.
+
+### Explicit skips
+- No paragraph-level ablation here — that's R2, needs test suite
+  to be meaningful.
+- No LLM-assisted paragraph classification — that's R3, adds cost.
+- No file-creation on extract — that needs P7.
+- No delta-compression on embedding cache — content-hash keys are
+  sufficient at our sizes.
+
+### Rules-too-lenient reframe
+Kept in the backlog as a small follow-up: bump missing-sections
+warn → error, missing-delimiter info → warn, and 2–3 other
+severities that under-count real issues. ~15 lines of default
+config change. Ships as a separate PR, not blocking R1.
+
 ## Phase 7 — Workspace file loader (NOT SHIPPED — needs deliberation)
 
 **The gap this closes.** Everything today reads from
