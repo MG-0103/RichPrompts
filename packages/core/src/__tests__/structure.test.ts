@@ -6,6 +6,8 @@ import {
   detectExtractionCandidates,
   detectNoise,
   estimateTokens,
+  longestCommonSubstring,
+  sharedPhrases,
   splitParagraphs,
 } from '../structure'
 import { parseDocument } from '../parser'
@@ -126,6 +128,20 @@ describe('detectDuplicationClusters', () => {
     expect(clusters).toHaveLength(0)
   })
 
+  it('populates sharedText via LCS when members share a verbatim run', () => {
+    const raw = [
+      'Always respond in JSON with keys kind, message, and followups. No markdown allowed.',
+      '',
+      'Please always respond in JSON with keys kind, message, and followups. No emojis either.',
+    ].join('\n')
+    const parsed = parseDocument(raw, 'prompt')
+    const paragraphs = splitParagraphs(raw, parsed.sections)
+    const clusters = detectDuplicationClusters(paragraphs, { threshold: 0.35 })
+    expect(clusters.length).toBeGreaterThanOrEqual(1)
+    expect(clusters[0].sharedText.length).toBeGreaterThanOrEqual(25)
+    expect(clusters[0].sharedText.toLowerCase()).toContain('respond in json')
+  })
+
   it('marks clusters as crossSection when members span canonical sections', () => {
     const raw = [
       '# Task',
@@ -139,6 +155,33 @@ describe('detectDuplicationClusters', () => {
     const clusters = detectDuplicationClusters(paragraphs, { threshold: 0.35 })
     const cross = clusters.find(c => c.crossSection)
     expect(cross).toBeDefined()
+  })
+})
+
+describe('longestCommonSubstring', () => {
+  it('finds the longest shared run, normalizing whitespace', () => {
+    const a = 'Always respond in JSON.   Never use markdown.'
+    const b = 'Also please always respond in JSON. Emojis are ok.'
+    expect(longestCommonSubstring(a, b).toLowerCase()).toContain('respond in json')
+  })
+  it('returns empty string when nothing meaningful matches', () => {
+    expect(longestCommonSubstring('cat', 'dog')).toBe('')
+  })
+})
+
+describe('sharedPhrases', () => {
+  it('finds phrases that appear in ≥ 2 texts', () => {
+    const texts = [
+      'always output json when the user asks',
+      'always output json unless the user says otherwise',
+      'unrelated content about the weather',
+    ]
+    const phrases = sharedPhrases(texts)
+    expect(phrases.some(p => p.includes('always output json'))).toBe(true)
+  })
+  it('returns an empty list when nothing repeats', () => {
+    const texts = ['alpha beta gamma delta', 'foo bar baz qux']
+    expect(sharedPhrases(texts)).toEqual([])
   })
 })
 

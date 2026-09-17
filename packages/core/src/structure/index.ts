@@ -15,6 +15,8 @@ export {
   detectDuplicationClusters,
   analyzeDuplication,
   adviceFor,
+  longestCommonSubstring,
+  sharedPhrases,
 } from './duplication'
 export type {
   DuplicationCluster,

@@ -437,6 +437,7 @@ function DuplicationListInner({
                   </button>
                 </span>
               </button>
+              <SharedContent cluster={c} />
               {open && (
                 <ul className="finding-members">
                   {members.map(p => (
@@ -460,6 +461,27 @@ function DuplicationListInner({
           )
         })}
       </ul>
+  )
+}
+
+function SharedContent({ cluster }: { cluster: DuplicationCluster }) {
+  const { sharedText, sharedNgrams } = cluster
+  if (!sharedText && sharedNgrams.length === 0) return null
+  return (
+    <div className="shared-content">
+      {sharedText ? (
+        <blockquote className="shared-lcs" title={`Longest common substring — ${sharedText.length} chars`}>
+          “{sharedText}”
+        </blockquote>
+      ) : (
+        <div className="shared-phrases">
+          <span className="shared-label">Shared phrases:</span>
+          {sharedNgrams.map((g, i) => (
+            <span key={i} className="shared-chip">{g}</span>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 

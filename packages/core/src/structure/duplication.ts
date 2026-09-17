@@ -1,6 +1,119 @@
 import { jaccard, trigrams } from '../similarity'
 import type { Paragraph } from './types'
 
+const SHARED_MIN_LCS = 25
+const SHARED_MAX_NGRAMS = 5
+const NGRAM_MIN_WORDS = 3
+const NGRAM_MAX_WORDS = 5
+
+/** Normalize whitespace so incidental spacing doesn't split LCS matches. */
+function normalize(s: string): string {
+  return s.replace(/\s+/g, ' ').trim()
+}
+
+/**
+ * Longest common substring between two strings via DP. O(n·m) time
+ * and O(min(n,m)) space (rolling row). Empty when nothing matches.
+ * Whitespace is normalized so a 500-char paragraph pair runs in ~250k
+ * ops — under a millisecond.
+ */
+export function longestCommonSubstring(aRaw: string, bRaw: string): string {
+  const a = normalize(aRaw)
+  const b = normalize(bRaw)
+  const n = a.length
+  const m = b.length
+  if (n === 0 || m === 0) return ''
+  // Ensure `a` is the shorter — reduces memory for the rolling row.
+  const [s, t] = n <= m ? [a, b] : [b, a]
+  const sLen = s.length
+  const tLen = t.length
+  const prev = new Uint32Array(sLen + 1)
+  const curr = new Uint32Array(sLen + 1)
+  let bestLen = 0
+  let bestEndInT = 0
+  for (let i = 1; i <= tLen; i++) {
+    for (let j = 1; j <= sLen; j++) {
+      if (t[i - 1] === s[j - 1]) {
+        curr[j] = prev[j - 1] + 1
+        if (curr[j] > bestLen) {
+          bestLen = curr[j]
+          bestEndInT = i
+        }
+      } else {
+        curr[j] = 0
+      }
+    }
+    prev.set(curr)
+    curr.fill(0)
+  }
+  return t.slice(bestEndInT - bestLen, bestEndInT)
+}
+
+/**
+ * Return the two paragraph ids in a cluster with the highest recorded
+ * pairwise similarity. Ties broken by original order.
+ */
+function topPair(
+  ids: string[],
+  pairSims: Map<string, number>,
+): [string | null, string | null] {
+  if (ids.length < 2) return [null, null]
+  const key = (a: string, b: string) => (a < b ? `${a}|${b}` : `${b}|${a}`)
+  let bestA = ids[0], bestB = ids[1]
+  let bestSim = pairSims.get(key(bestA, bestB)) ?? -1
+  for (let i = 0; i < ids.length; i++) {
+    for (let j = i + 1; j < ids.length; j++) {
+      const sim = pairSims.get(key(ids[i], ids[j])) ?? -1
+      if (sim > bestSim) {
+        bestSim = sim
+        bestA = ids[i]
+        bestB = ids[j]
+      }
+    }
+  }
+  return [bestA, bestB]
+}
+
+/**
+ * Multi-word phrases (3-5 word n-grams) that appear in ≥ 2 of the
+ * given texts. Ranked by phrase word-length desc, tie-break on
+ * frequency. Returns up to SHARED_MAX_NGRAMS.
+ */
+export function sharedPhrases(texts: string[]): string[] {
+  if (texts.length < 2) return []
+  const counts = new Map<string, number>()
+  for (const raw of texts) {
+    const tokens = normalize(raw.toLowerCase()).split(/\s+/).filter(w => w.length > 0)
+    const seenInDoc = new Set<string>()
+    for (let n = NGRAM_MIN_WORDS; n <= NGRAM_MAX_WORDS; n++) {
+      for (let i = 0; i + n <= tokens.length; i++) {
+        const gram = tokens.slice(i, i + n).join(' ')
+        if (seenInDoc.has(gram)) continue
+        seenInDoc.add(gram)
+      }
+    }
+    for (const gram of seenInDoc) {
+      counts.set(gram, (counts.get(gram) ?? 0) + 1)
+    }
+  }
+  const shared = Array.from(counts.entries())
+    .filter(([, c]) => c >= 2)
+    .sort((a, b) => {
+      const aWords = a[0].split(' ').length
+      const bWords = b[0].split(' ').length
+      if (bWords !== aWords) return bWords - aWords
+      return b[1] - a[1]
+    })
+  // Drop n-grams that are wholly contained in a longer kept one.
+  const out: string[] = []
+  for (const [gram] of shared) {
+    if (out.some(kept => kept.includes(gram))) continue
+    out.push(gram)
+    if (out.length >= SHARED_MAX_NGRAMS) break
+  }
+  return out
+}
+
 export interface DuplicationCluster {
   id: string
   paragraphIds: string[]
@@ -12,6 +125,14 @@ export interface DuplicationCluster {
   crossSection: boolean
   /** First ~80 chars of the shortest cluster member — used as a preview. */
   preview: string
+  /** Longest common substring across the top-similarity pair. Empty
+   *  when no substring of ≥ SHARED_MIN_LCS chars is shared (e.g.
+   *  paraphrase-shaped clusters). */
+  sharedText: string
+  /** Shared multi-word phrases (3-5 word n-grams) that appear in
+   *  ≥ 2 members. Fallback for paraphrase clusters where sharedText
+   *  is empty. Ranked by phrase length. */
+  sharedNgrams: string[]
 }
 
 export interface DuplicationEdge {
@@ -129,6 +250,16 @@ export function analyzeDuplication(
     const shortest = members.reduce((a, p) => p.text.length < a.text.length ? p : a, members[0])
     const previewSource = shortest.text.replace(/\s+/g, ' ').trim()
     const preview = previewSource.slice(0, 80) + (previewSource.length > 80 ? '…' : '')
+
+    // LCS from the top-similarity pair in the cluster; n-grams across
+    // all members as a fallback for paraphrase-shaped clusters.
+    const [topA, topB] = topPair(ids, pairSims)
+    const lcsRaw = topA && topB
+      ? longestCommonSubstring(byId.get(topA)!.text, byId.get(topB)!.text)
+      : ''
+    const sharedText = lcsRaw.length >= SHARED_MIN_LCS ? lcsRaw : ''
+    const sharedNgrams = sharedPhrases(members.map(p => p.text))
+
     out.push({
       id: `dup-${clusterId++}`,
       paragraphIds: ids,
@@ -136,6 +267,8 @@ export function analyzeDuplication(
       totalChars,
       crossSection,
       preview,
+      sharedText,
+      sharedNgrams,
     })
   }
 

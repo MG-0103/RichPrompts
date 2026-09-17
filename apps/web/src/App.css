@@ -1326,6 +1326,46 @@ body.splitter-dragging .preview-col { pointer-events: none; }
 .finding-badge.dup { color: #dc9; background: #2a2418; }
 .finding-badge.noise { color: #b9c; background: #2a1a2a; }
 
+.shared-content {
+  padding: 4px 4px 6px 44px;
+  font-size: 11.5px;
+}
+.shared-lcs {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid #d69a3a;
+  background: #221d10;
+  color: #dc9;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+  line-height: 1.4;
+  border-radius: 0 3px 3px 0;
+  overflow-wrap: anywhere;
+}
+.shared-phrases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 4px 4px 2px;
+}
+.shared-label {
+  color: #888;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  margin-right: 2px;
+}
+.shared-chip {
+  font-family: ui-monospace, monospace;
+  font-size: 10.5px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  background: #221d10;
+  color: #dc9;
+  border: 1px solid #3a2f18;
+}
+
 /* Duplication view toggle + graph */
 .structure-block-title {
   display: flex;
