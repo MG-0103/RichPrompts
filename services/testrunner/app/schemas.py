@@ -80,3 +80,15 @@ class TestRunResponse(BaseModel):
     results: list[TestResult]
     durationMs: float
     sidecarVersion: str
+
+
+class EmbedRequest(BaseModel):
+    texts: list[str]
+    model: str | None = None
+
+
+class EmbedResponse(BaseModel):
+    vectors: list[list[float]]
+    cachedCount: int
+    model: str
+    durationMs: float

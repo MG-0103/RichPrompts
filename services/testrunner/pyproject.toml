@@ -7,6 +7,10 @@ dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.32",
     "pydantic>=2.9",
+    # httpx: used for OpenAI embeddings calls in /embed. Direct REST
+    # keeps deps minimal vs. the openai SDK; FastAPI already pulls
+    # httpx transitively, so this is effectively free.
+    "httpx>=0.27",
 ]
 
 [project.optional-dependencies]

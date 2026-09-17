@@ -5,9 +5,20 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 from .cache import CACHE, key_for
+from .embed import (
+    CACHE as EMBED_CACHE,
+    DEFAULT_MODEL as DEFAULT_EMBED_MODEL,
+    EmbedError,
+    embed_batch,
+    is_available as embed_available,
+    MAX_BATCH as EMBED_MAX_BATCH,
+    MAX_CHARS_PER_TEXT as EMBED_MAX_CHARS,
+)
 from .mock_runner import run_mock
 from .real_runner import is_available as real_available, run_real
 from .schemas import (
+    EmbedRequest,
+    EmbedResponse,
     RegistryEntry,
     TestCase,
     TestResult,
@@ -17,7 +28,7 @@ from .schemas import (
 )
 from .strip import strip_entries
 
-SIDECAR_VERSION = "0.4.0"
+SIDECAR_VERSION = "0.5.0"
 
 app = FastAPI(title="RichPrompt Test Runner", version=SIDECAR_VERSION)
 
@@ -32,19 +43,63 @@ app.add_middleware(
 
 @app.get("/health")
 def health() -> dict:
-    real_ok, reason = real_available()
+    real_ok, real_reason = real_available()
+    embed_ok, embed_reason = embed_available()
     return {
         "ok": True,
         "version": SIDECAR_VERSION,
         "mode": "real+mock" if real_ok else "mock",
-        "real": {"available": real_ok, "reason": reason},
-        "cache": {"size": CACHE.size()},
+        "real": {"available": real_ok, "reason": real_reason},
+        "openai": {"available": embed_ok, "reason": embed_reason},
+        "cache": {"size": CACHE.size(), "embed": EMBED_CACHE.size()},
     }
 
 
 @app.delete("/cache")
 def clear_cache() -> dict:
-    return {"cleared": CACHE.clear()}
+    return {
+        "cleared": CACHE.clear(),
+        "embed_cleared": EMBED_CACHE.clear(),
+    }
+
+
+@app.post("/embed", response_model=EmbedResponse)
+async def embed(req: EmbedRequest) -> EmbedResponse:
+    if len(req.texts) == 0:
+        return EmbedResponse(vectors=[], cachedCount=0, model=req.model or DEFAULT_EMBED_MODEL, durationMs=0.0)
+    if len(req.texts) > EMBED_MAX_BATCH * 4:
+        raise HTTPException(
+            status_code=413,
+            detail=f"too many texts in one call: {len(req.texts)} > {EMBED_MAX_BATCH * 4}",
+        )
+    for i, t in enumerate(req.texts):
+        if not isinstance(t, str):
+            raise HTTPException(status_code=422, detail=f"texts[{i}] is not a string")
+    for i, t in enumerate(req.texts):
+        if len(t) > EMBED_MAX_CHARS * 2:
+            # Server-side truncate happens in embed_batch; if it's WAY over
+            # the caller likely made a mistake — reject rather than silently
+            # truncating a 40k-char blob.
+            raise HTTPException(
+                status_code=413,
+                detail=f"texts[{i}] length {len(t)} exceeds {EMBED_MAX_CHARS * 2}",
+            )
+    ready, reason = embed_available()
+    if not ready:
+        raise HTTPException(status_code=503, detail=f"embeddings unavailable: {reason}")
+
+    started = time.perf_counter()
+    try:
+        vectors, cached_count = await embed_batch(req.texts, req.model)
+    except EmbedError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    duration = (time.perf_counter() - started) * 1000
+    return EmbedResponse(
+        vectors=vectors,
+        cachedCount=cached_count,
+        model=req.model or DEFAULT_EMBED_MODEL,
+        durationMs=duration,
+    )
 
 
 def _run_pass(
