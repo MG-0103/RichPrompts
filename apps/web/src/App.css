@@ -1366,6 +1366,72 @@ body.splitter-dragging .preview-col { pointer-events: none; }
   border: 1px solid #3a2f18;
 }
 
+/* Duplication mode chip + deep-analyze button */
+.mode-chip {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 2px;
+}
+.mode-chip.mode-trigram   { color: #888; background: #232323; }
+.mode-chip.mode-semantic  { color: #a9d; background: #241a2a; border: 1px solid #3a2b45; }
+
+.deep-btn {
+  font-size: 10px;
+  padding: 3px 10px;
+  background: #1a2a35;
+  color: #9bd;
+  border: 1px solid #34506e;
+  border-radius: 3px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.deep-btn:hover:not(:disabled) { background: #223a4a; color: #cde; }
+.deep-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.deep-btn.active {
+  background: #241a2a;
+  color: #a9d;
+  border-color: #3a2b45;
+}
+.deep-btn.active:hover:not(:disabled) { background: #2f2138; color: #dc9; }
+.deep-btn.loading { color: #dc9; }
+.deep-meta {
+  font-size: 9px;
+  color: #778;
+  text-transform: none;
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.semantic-error {
+  margin: 4px 8px;
+  padding: 6px 10px;
+  background: #3a1a1a;
+  border: 1px solid #722;
+  border-radius: 3px;
+  color: #f88;
+  font-family: ui-monospace, monospace;
+  font-size: 11px;
+}
+.semantic-stale {
+  margin: 4px 8px;
+  padding: 6px 10px;
+  background: #2a2418;
+  border: 1px solid #554;
+  border-radius: 3px;
+  color: #dc9;
+  font-size: 11px;
+}
+
 /* Duplication view toggle + graph */
 .structure-block-title {
   display: flex;

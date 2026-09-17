@@ -27,6 +27,7 @@ import { StructurePanel } from './components/StructurePanel'
 import { useRegistry } from './hooks/useRegistry'
 import { useScore } from './hooks/useScore'
 import { useLLMReview } from './hooks/useLLMReview'
+import { useSemanticDuplication } from './hooks/useSemanticDuplication'
 import { useStructure } from './hooks/useStructure'
 import { useTests } from './hooks/useTests'
 import { useVersioning } from './hooks/useVersioning'
@@ -87,6 +88,14 @@ function App() {
   const structureReport: StructureReport | null = structure.report
   const isBigPrompt = source.length >= 5000 && docType !== 'tool'
   const structureHash = useMemo(() => `${docType}:${hashContent(source)}`, [docType, source])
+  const semantic = useSemanticDuplication(
+    structureReport?.paragraphs ?? [],
+    structureHash,
+  )
+  const openaiReady =
+    tests.sidecar.state === 'up' ? Boolean(tests.sidecar.openai?.available) : false
+  const openaiReason =
+    tests.sidecar.state === 'up' ? tests.sidecar.openai?.reason ?? null : 'sidecar offline'
   const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissals(structureHash))
   useEffect(() => { setDismissed(loadDismissals(structureHash)) }, [structureHash])
   const onToggleDismiss = (id: string) => setDismissed(toggleDismissal(structureHash, id))
@@ -465,6 +474,11 @@ function App() {
               manualMode={structure.manualMode}
               lastDurationMs={structure.lastDurationMs}
               onReanalyze={structure.reanalyze}
+              semantic={semantic}
+              onActivateSemantic={semantic.activate}
+              onDeactivateSemantic={semantic.deactivate}
+              openaiReady={openaiReady}
+              openaiReason={openaiReason}
             />
           )}
           {bottomTab === 'history' && (

@@ -15,6 +15,8 @@ const DuplicationGraph = lazy(() =>
   import('./DuplicationGraph').then(m => ({ default: m.DuplicationGraph })),
 )
 
+import type { SemanticState } from '../hooks/useSemanticDuplication'
+
 interface Props {
   report: StructureReport
   onJump: (offset: number) => void
@@ -28,6 +30,13 @@ interface Props {
   manualMode: boolean
   lastDurationMs: number
   onReanalyze: () => void
+  /** Semantic (embeddings) duplication state + controls. */
+  semantic: SemanticState
+  onActivateSemantic: () => void | Promise<void>
+  onDeactivateSemantic: () => void
+  /** Is the sidecar's OpenAI path available? */
+  openaiReady: boolean
+  openaiReason: string | null
 }
 
 const SECTION_COLORS: Record<CanonicalSection, string> = {
@@ -50,21 +59,31 @@ export function StructurePanel({
   manualMode,
   lastDurationMs,
   onReanalyze,
+  semantic,
+  onActivateSemantic,
+  onDeactivateSemantic,
+  openaiReady,
+  openaiReason,
 }: Props) {
   const {
     budget, sections, chars, approxTokens,
     duplicationClusters, duplicationEdges, noise, paragraphs,
   } = report
+  // When semantic mode is active AND we have a successful analysis, use
+  // it in place of the trigram data. Otherwise trigram wins.
+  const usingSemantic = semantic.active && semantic.analysis !== null
+  const activeClusters = usingSemantic ? semantic.analysis!.clusters : duplicationClusters
+  const activeEdges = usingSemantic ? semantic.analysis!.edges : duplicationEdges
   const paragraphById = useMemo(() => {
     const m = new Map<string, Paragraph>()
     for (const p of paragraphs) m.set(p.id, p)
     return m
   }, [paragraphs])
 
-  const activeDups = duplicationClusters.filter(c => !dismissed.has(c.id))
+  const activeDups = activeClusters.filter(c => !dismissed.has(c.id))
   const activeNoise = noise.filter(n => !dismissed.has(n.id))
   const dismissedCount =
-    duplicationClusters.filter(c => dismissed.has(c.id)).length +
+    activeClusters.filter(c => dismissed.has(c.id)).length +
     noise.filter(n => dismissed.has(n.id)).length
 
   return (
@@ -83,11 +102,17 @@ export function StructurePanel({
       <SectionList sections={sections} onJump={onJump} />
       <DuplicationSection
         clusters={activeDups}
-        edges={duplicationEdges}
+        edges={activeEdges}
         paragraphById={paragraphById}
         paragraphs={paragraphs}
         onJump={onJump}
         onDismiss={onToggleDismiss}
+        semantic={semantic}
+        usingSemantic={usingSemantic}
+        openaiReady={openaiReady}
+        openaiReason={openaiReason}
+        onActivateSemantic={onActivateSemantic}
+        onDeactivateSemantic={onDeactivateSemantic}
       />
       <NoiseList
         flags={activeNoise}
@@ -319,6 +344,12 @@ function DuplicationSection({
   paragraphs,
   onJump,
   onDismiss,
+  semantic,
+  usingSemantic,
+  openaiReady,
+  openaiReason,
+  onActivateSemantic,
+  onDeactivateSemantic,
 }: {
   clusters: DuplicationCluster[]
   edges: DuplicationEdge[]
@@ -326,6 +357,12 @@ function DuplicationSection({
   paragraphs: Paragraph[]
   onJump: (offset: number) => void
   onDismiss: (id: string) => void
+  semantic: SemanticState
+  usingSemantic: boolean
+  openaiReady: boolean
+  openaiReason: string | null
+  onActivateSemantic: () => void | Promise<void>
+  onDeactivateSemantic: () => void
 }) {
   const [view, setView] = useState<'list' | 'graph'>(() => {
     try { return (localStorage.getItem('richprompt.dup.view') as 'list' | 'graph') || 'list' } catch { return 'list' }
@@ -338,29 +375,59 @@ function DuplicationSection({
     const active = new Set(clusters.map(c => c.id))
     return edges.filter(e => active.has(e.clusterId))
   }, [clusters, edges])
+  const header = (
+    <>
+      <div className="structure-block-title">
+        Duplication <span className="count">{clusters.length}</span>
+        {usingSemantic && <span className="mode-chip mode-semantic">semantic</span>}
+        {!usingSemantic && <span className="mode-chip mode-trigram">trigram</span>}
+        <DeepAnalyzeControl
+          semantic={semantic}
+          usingSemantic={usingSemantic}
+          openaiReady={openaiReady}
+          openaiReason={openaiReason}
+          onActivate={onActivateSemantic}
+          onDeactivate={onDeactivateSemantic}
+        />
+        {clusters.length > 0 && (
+          <div className="view-toggle">
+            <button
+              className={`vt ${view === 'list' ? 'active' : ''}`}
+              onClick={() => toggleView('list')}
+            >list</button>
+            <button
+              className={`vt ${view === 'graph' ? 'active' : ''}`}
+              onClick={() => toggleView('graph')}
+            >graph</button>
+          </div>
+        )}
+      </div>
+      {semantic.error && (
+        <div className="semantic-error">{semantic.error}</div>
+      )}
+      {usingSemantic && semantic.stale && (
+        <div className="semantic-stale">
+          Doc changed since the last deep analysis.{' '}
+          <button className="link-btn" onClick={onActivateSemantic}>Re-run</button>
+        </div>
+      )}
+    </>
+  )
   if (clusters.length === 0) {
     return (
       <div className="structure-block">
-        <div className="structure-block-title">Duplication</div>
-        <div className="structure-empty">No near-duplicate paragraphs above the threshold.</div>
+        {header}
+        <div className="structure-empty">
+          {usingSemantic
+            ? 'No paraphrase-level duplication above the semantic threshold.'
+            : 'No near-duplicate paragraphs above the trigram threshold.'}
+        </div>
       </div>
     )
   }
   return (
     <div className="structure-block">
-      <div className="structure-block-title">
-        Duplication <span className="count">{clusters.length}</span>
-        <div className="view-toggle">
-          <button
-            className={`vt ${view === 'list' ? 'active' : ''}`}
-            onClick={() => toggleView('list')}
-          >list</button>
-          <button
-            className={`vt ${view === 'graph' ? 'active' : ''}`}
-            onClick={() => toggleView('graph')}
-          >graph</button>
-        </div>
-      </div>
+      {header}
       {view === 'graph' ? (
         <Suspense fallback={<div className="dup-graph-empty">Loading graph…</div>}>
           <DuplicationGraph
@@ -380,6 +447,58 @@ function DuplicationSection({
         />
       )}
     </div>
+  )
+}
+
+function DeepAnalyzeControl({
+  semantic,
+  usingSemantic,
+  openaiReady,
+  openaiReason,
+  onActivate,
+  onDeactivate,
+}: {
+  semantic: SemanticState
+  usingSemantic: boolean
+  openaiReady: boolean
+  openaiReason: string | null
+  onActivate: () => void | Promise<void>
+  onDeactivate: () => void
+}) {
+  const label = semantic.loading
+    ? 'Analyzing…'
+    : usingSemantic
+    ? 'Back to trigram'
+    : 'Deep analyze'
+  const onClick = () => {
+    if (semantic.loading) return
+    if (usingSemantic) onDeactivate()
+    else void onActivate()
+  }
+  const disabled = !usingSemantic && !openaiReady && !semantic.loading
+  const title = disabled
+    ? (openaiReason ?? 'OpenAI embeddings unavailable — set OPENAI_API_KEY on the sidecar')
+    : usingSemantic
+    ? 'Return to fast trigram-based duplication'
+    : 'Run OpenAI embeddings for paraphrase-level duplication detection'
+  return (
+    <button
+      className={`deep-btn ${usingSemantic ? 'active' : ''} ${semantic.loading ? 'loading' : ''}`}
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+    >
+      {semantic.loading && <span className="spinner" />}
+      {label}
+      {usingSemantic && !semantic.loading && (
+        <span className="deep-meta">
+          {' '}· {semantic.lastFetchedCount + semantic.lastCachedCount} ¶
+          {semantic.lastCachedCount > 0 && ` (${semantic.lastCachedCount} cached)`}
+          {' · '}
+          {Math.round(semantic.lastDurationMs)}ms
+        </span>
+      )}
+    </button>
   )
 }
 

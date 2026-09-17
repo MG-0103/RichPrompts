@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   analyzeStructure,
   budgetFor,
+  clusterByPairwiseSimilarity,
   detectDuplicationClusters,
   detectExtractionCandidates,
   detectNoise,
@@ -10,6 +11,7 @@ import {
   sharedPhrases,
   splitParagraphs,
 } from '../structure'
+import { cosineSimilarity } from '../similarity'
 import { parseDocument } from '../parser'
 
 describe('estimateTokens', () => {
@@ -155,6 +157,40 @@ describe('detectDuplicationClusters', () => {
     const clusters = detectDuplicationClusters(paragraphs, { threshold: 0.35 })
     const cross = clusters.find(c => c.crossSection)
     expect(cross).toBeDefined()
+  })
+})
+
+describe('cosineSimilarity', () => {
+  it('returns 1 for identical vectors', () => {
+    const v = [1, 2, 3]
+    expect(cosineSimilarity(v, v)).toBeCloseTo(1)
+  })
+  it('returns 0 for orthogonal vectors', () => {
+    expect(cosineSimilarity([1, 0], [0, 1])).toBeCloseTo(0)
+  })
+  it('returns 0 when one vector is all zero', () => {
+    expect(cosineSimilarity([0, 0], [1, 1])).toBe(0)
+  })
+})
+
+describe('clusterByPairwiseSimilarity', () => {
+  it('clusters using an arbitrary similarity function', () => {
+    const raw = [
+      'The first paragraph is about apples and their many varieties around the world.',
+      '',
+      'The second paragraph is about bananas and tropical fruit trees in equatorial forests.',
+      '',
+      'A third paragraph, also about apples and their many kinds grown in temperate climates.',
+    ].join('\n')
+    const parsed = parseDocument(raw, 'prompt')
+    const ps = splitParagraphs(raw, parsed.sections)
+    // Force clusters by returning 1 when both mention 'apples', else 0
+    const sim = (a: { text: string }, b: { text: string }) =>
+      a.text.includes('apples') && b.text.includes('apples') ? 1 : 0
+    const { clusters, edges } = clusterByPairwiseSimilarity(ps, sim, { threshold: 0.5 })
+    expect(clusters).toHaveLength(1)
+    expect(clusters[0].paragraphIds.length).toBe(2)
+    expect(edges.length).toBe(1)
   })
 })
 

@@ -10,6 +10,7 @@ export type SidecarStatus =
       version?: string
       mode?: string
       real?: { available: boolean; reason?: string | null }
+      openai?: { available: boolean; reason?: string | null }
     }
   | { state: 'down' }
 
@@ -47,7 +48,7 @@ export function useTests() {
     const h = await checkHealth()
     setSidecar(
       h.ok
-        ? { state: 'up', version: h.version, mode: h.mode, real: h.real }
+        ? { state: 'up', version: h.version, mode: h.mode, real: h.real, openai: h.openai }
         : { state: 'down' },
     )
   }, [])

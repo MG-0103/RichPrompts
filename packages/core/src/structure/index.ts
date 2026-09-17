@@ -14,6 +14,7 @@ export type { NoiseFlag, NoiseKind } from './noise'
 export {
   detectDuplicationClusters,
   analyzeDuplication,
+  clusterByPairwiseSimilarity,
   adviceFor,
   longestCommonSubstring,
   sharedPhrases,

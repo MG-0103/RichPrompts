@@ -32,7 +32,7 @@ export type {
   RegistryFinding,
   RegistryConfig,
 } from './registry'
-export { similarity, trigrams, jaccard } from './similarity'
+export { similarity, trigrams, jaccard, cosineSimilarity } from './similarity'
 export { scoreDiagnostics, hashContent, defaultWeights } from './score'
 export type { ScoreBreakdown, ScoreWeights } from './score'
 export type {
@@ -53,6 +53,7 @@ export {
   detectNoise,
   detectDuplicationClusters,
   analyzeDuplication,
+  clusterByPairwiseSimilarity,
   detectExtractionCandidates,
   adviceFor,
 } from './structure'
