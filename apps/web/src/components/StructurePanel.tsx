@@ -15,7 +15,10 @@ const DuplicationGraph = lazy(() =>
   import('./DuplicationGraph').then(m => ({ default: m.DuplicationGraph })),
 )
 
-import type { SemanticState } from '../hooks/useSemanticDuplication'
+import type {
+  ContradictionFinding,
+  SemanticState,
+} from '../hooks/useSemanticDuplication'
 
 interface Props {
   report: StructureReport
@@ -100,9 +103,16 @@ export function StructurePanel({
       <BudgetBar budget={budget} chars={chars} approxTokens={approxTokens} />
       <SectionStack sections={sections} totalChars={chars} onJump={onJump} />
       <SectionList sections={sections} onJump={onJump} />
+      {usingSemantic && semantic.verified && semantic.contradictions.length > 0 && (
+        <ContradictionList
+          items={semantic.contradictions}
+          onJump={onJump}
+        />
+      )}
       <DuplicationSection
         clusters={activeDups}
         edges={activeEdges}
+        edgeLabels={usingSemantic ? semantic.edgeLabels : {}}
         paragraphById={paragraphById}
         paragraphs={paragraphs}
         onJump={onJump}
@@ -340,6 +350,7 @@ function StatusStrip({
 function DuplicationSection({
   clusters,
   edges,
+  edgeLabels,
   paragraphById,
   paragraphs,
   onJump,
@@ -353,6 +364,7 @@ function DuplicationSection({
 }: {
   clusters: DuplicationCluster[]
   edges: DuplicationEdge[]
+  edgeLabels: SemanticState['edgeLabels']
   paragraphById: Map<string, Paragraph>
   paragraphs: Paragraph[]
   onJump: (offset: number) => void
@@ -440,6 +452,8 @@ function DuplicationSection({
       ) : (
         <DuplicationListInner
           clusters={clusters}
+          edges={activeEdges}
+          edgeLabels={edgeLabels}
           paragraphById={paragraphById}
           paragraphs={paragraphs}
           onJump={onJump}
@@ -448,6 +462,71 @@ function DuplicationSection({
       )}
     </div>
   )
+}
+
+function ContradictionList({
+  items,
+  onJump,
+}: {
+  items: ContradictionFinding[]
+  onJump: (offset: number) => void
+}) {
+  return (
+    <div className="structure-block">
+      <div className="structure-block-title">
+        Contradictions <span className="count">{items.length}</span>
+        <span className="contra-hint">verified by LLM</span>
+      </div>
+      <ul className="finding-list">
+        {items.map(c => (
+          <li key={c.id} className="finding-row">
+            <div className="finding-header static">
+              <span className="finding-badge contra">contradiction</span>
+              <span className="finding-similarity">{Math.round(c.similarity * 100)}%</span>
+              <span className="finding-message">
+                <strong>{c.reason || 'Model flagged these two paragraphs as conflicting.'}</strong>
+              </span>
+              <span className="finding-actions">
+                <button className="link-btn" onClick={() => onJump(c.fromOffset)}>jump A</button>
+                <button className="link-btn" onClick={() => onJump(c.toOffset)}>jump B</button>
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+/** Roll edge-level verdicts up to a single cluster label. Any
+ *  contradictory edge wins (it's the most actionable signal); otherwise
+ *  a majority vote. Undefined when no edges have been verified. */
+function aggregateClusterLabels(
+  clusters: DuplicationCluster[],
+  edges: DuplicationEdge[],
+  edgeLabels: SemanticState['edgeLabels'],
+): Record<string, 'duplicate' | 'contradictory' | 'related' | 'unrelated' | undefined> {
+  if (Object.keys(edgeLabels).length === 0) return {}
+  const out: Record<string, ReturnType<typeof aggregateClusterLabels>[string]> = {}
+  for (const c of clusters) {
+    const clusterEdges = edges.filter(e => e.clusterId === c.id)
+    const key = (e: DuplicationEdge) => e.from < e.to ? `${e.from}|${e.to}` : `${e.to}|${e.from}`
+    const labels = clusterEdges
+      .map(e => edgeLabels[key(e)])
+      .filter((v): v is NonNullable<typeof v> => !!v)
+      .map(v => v.label)
+    if (labels.length === 0) { out[c.id] = undefined; continue }
+    if (labels.includes('contradictory')) { out[c.id] = 'contradictory'; continue }
+    const counts: Record<string, number> = {}
+    for (const l of labels) counts[l] = (counts[l] ?? 0) + 1
+    let best: string | undefined
+    let bestN = 0
+    for (const [l, n] of Object.entries(counts)) {
+      if (n > bestN) { best = l; bestN = n }
+    }
+    out[c.id] = best as ReturnType<typeof aggregateClusterLabels>[string]
+  }
+  return out
 }
 
 function DeepAnalyzeControl({
@@ -466,7 +545,11 @@ function DeepAnalyzeControl({
   onDeactivate: () => void
 }) {
   const label = semantic.loading
-    ? 'Analyzing…'
+    ? semantic.phase === 'verifying'
+      ? 'Verifying…'
+      : semantic.phase === 'embedding'
+      ? 'Embedding…'
+      : 'Analyzing…'
     : usingSemantic
     ? 'Back to trigram'
     : 'Deep analyze'
@@ -494,6 +577,7 @@ function DeepAnalyzeControl({
         <span className="deep-meta">
           {' '}· {semantic.lastFetchedCount + semantic.lastCachedCount} ¶
           {semantic.lastCachedCount > 0 && ` (${semantic.lastCachedCount} cached)`}
+          {semantic.verified && ' · verified'}
           {' · '}
           {Math.round(semantic.lastDurationMs)}ms
         </span>
@@ -504,17 +588,22 @@ function DeepAnalyzeControl({
 
 function DuplicationListInner({
   clusters,
+  edges,
+  edgeLabels,
   paragraphById,
   paragraphs,
   onJump,
   onDismiss,
 }: {
   clusters: DuplicationCluster[]
+  edges: DuplicationEdge[]
+  edgeLabels: SemanticState['edgeLabels']
   paragraphById: Map<string, Paragraph>
   paragraphs: Paragraph[]
   onJump: (offset: number) => void
   onDismiss: (id: string) => void
 }) {
+  const clusterVerdicts = useMemo(() => aggregateClusterLabels(clusters, edges, edgeLabels), [clusters, edges, edgeLabels])
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const toggle = (id: string) =>
     setExpanded(prev => {
@@ -539,6 +628,11 @@ function DuplicationListInner({
                 <span className={`chev ${open ? 'open' : ''}`}>▸</span>
                 <span className="finding-badge dup">{c.paragraphIds.length}×</span>
                 <span className="finding-similarity">{Math.round(c.similarity * 100)}%</span>
+                {clusterVerdicts[c.id] && (
+                  <span className={`verdict-chip v-${clusterVerdicts[c.id]}`}>
+                    {clusterVerdicts[c.id]}
+                  </span>
+                )}
                 <span className="finding-message">{adviceFor(c, paragraphs)}</span>
                 <span className="finding-actions" onClick={e => e.stopPropagation()}>
                   <button

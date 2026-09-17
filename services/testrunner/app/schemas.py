@@ -92,3 +92,28 @@ class EmbedResponse(BaseModel):
     cachedCount: int
     model: str
     durationMs: float
+
+
+class VerifyPair(BaseModel):
+    a: str
+    b: str
+
+
+class VerifyRequest(BaseModel):
+    pairs: list[VerifyPair]
+    model: str | None = None
+
+
+VerifyLabel = Literal["duplicate", "contradictory", "related", "unrelated"]
+
+
+class VerifyVerdict(BaseModel):
+    label: VerifyLabel
+    reason: str
+
+
+class VerifyResponse(BaseModel):
+    verdicts: list[VerifyVerdict]
+    cachedCount: int
+    model: str
+    durationMs: float

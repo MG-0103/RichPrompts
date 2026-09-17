@@ -88,9 +88,12 @@ function App() {
   const structureReport: StructureReport | null = structure.report
   const isBigPrompt = source.length >= 5000 && docType !== 'tool'
   const structureHash = useMemo(() => `${docType}:${hashContent(source)}`, [docType, source])
+  const verifierReady =
+    tests.sidecar.state === 'up' ? Boolean(tests.sidecar.verifier?.available) : false
   const semantic = useSemanticDuplication(
     structureReport?.paragraphs ?? [],
     structureHash,
+    { verifierAvailable: verifierReady },
   )
   const openaiReady =
     tests.sidecar.state === 'up' ? Boolean(tests.sidecar.openai?.available) : false

@@ -53,6 +53,15 @@ uvicorn app.main:app --port 8787 --reload
   413 on batches over 512 texts or per-text length over 16k chars.
   Server-side cache keyed by sha256(text + model); response reports
   cache hits.
+- `POST /verify` → classifies paragraph-pair relationships using
+  an OpenAI chat model (default `gpt-4o-mini`). Body:
+  `{pairs: [{a, b}], model?}`. Response:
+  `{verdicts: [{label, reason}], cachedCount, model, durationMs}`.
+  Labels are one of `duplicate`, `contradictory`, `related`,
+  `unrelated`. Same `OPENAI_API_KEY`; same error-code shape (413
+  on >128 pairs or per-text >8k chars, 502 on OpenAI failures,
+  503 when the key isn't set). Order-independent cache: swapping
+  `a` and `b` hits the same key.
 
 ## Model selection
 

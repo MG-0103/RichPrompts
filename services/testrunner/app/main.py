@@ -14,6 +14,15 @@ from .embed import (
     MAX_BATCH as EMBED_MAX_BATCH,
     MAX_CHARS_PER_TEXT as EMBED_MAX_CHARS,
 )
+from .verify import (
+    CACHE as VERIFY_CACHE,
+    DEFAULT_MODEL as DEFAULT_VERIFY_MODEL,
+    MAX_PAIRS as VERIFY_MAX_PAIRS,
+    MAX_CHARS_PER_TEXT as VERIFY_MAX_CHARS,
+    VerifyError,
+    is_available as verify_available,
+    verify_pairs,
+)
 from .mock_runner import run_mock
 from .real_runner import is_available as real_available, run_real
 from .schemas import (
@@ -25,10 +34,13 @@ from .schemas import (
     TestRunConfig,
     TestRunRequest,
     TestRunResponse,
+    VerifyRequest,
+    VerifyResponse,
+    VerifyVerdict,
 )
 from .strip import strip_entries
 
-SIDECAR_VERSION = "0.5.0"
+SIDECAR_VERSION = "0.6.0"
 
 app = FastAPI(title="RichPrompt Test Runner", version=SIDECAR_VERSION)
 
@@ -45,13 +57,20 @@ app.add_middleware(
 def health() -> dict:
     real_ok, real_reason = real_available()
     embed_ok, embed_reason = embed_available()
+    verify_ok, verify_reason = verify_available()
     return {
         "ok": True,
         "version": SIDECAR_VERSION,
         "mode": "real+mock" if real_ok else "mock",
         "real": {"available": real_ok, "reason": real_reason},
+        # openai path covers both embeddings and verifier (same key).
         "openai": {"available": embed_ok, "reason": embed_reason},
-        "cache": {"size": CACHE.size(), "embed": EMBED_CACHE.size()},
+        "verifier": {"available": verify_ok, "reason": verify_reason},
+        "cache": {
+            "size": CACHE.size(),
+            "embed": EMBED_CACHE.size(),
+            "verify": VERIFY_CACHE.size(),
+        },
     }
 
 
@@ -60,6 +79,7 @@ def clear_cache() -> dict:
     return {
         "cleared": CACHE.clear(),
         "embed_cleared": EMBED_CACHE.clear(),
+        "verify_cleared": VERIFY_CACHE.clear(),
     }
 
 
@@ -98,6 +118,47 @@ async def embed(req: EmbedRequest) -> EmbedResponse:
         vectors=vectors,
         cachedCount=cached_count,
         model=req.model or DEFAULT_EMBED_MODEL,
+        durationMs=duration,
+    )
+
+
+@app.post("/verify", response_model=VerifyResponse)
+async def verify(req: VerifyRequest) -> VerifyResponse:
+    if len(req.pairs) == 0:
+        return VerifyResponse(
+            verdicts=[],
+            cachedCount=0,
+            model=req.model or DEFAULT_VERIFY_MODEL,
+            durationMs=0.0,
+        )
+    if len(req.pairs) > VERIFY_MAX_PAIRS:
+        raise HTTPException(
+            status_code=413,
+            detail=f"too many pairs in one call: {len(req.pairs)} > {VERIFY_MAX_PAIRS}",
+        )
+    for i, p in enumerate(req.pairs):
+        if len(p.a) > VERIFY_MAX_CHARS * 2 or len(p.b) > VERIFY_MAX_CHARS * 2:
+            raise HTTPException(
+                status_code=413,
+                detail=f"pairs[{i}] text exceeds {VERIFY_MAX_CHARS * 2}",
+            )
+    ready, reason = verify_available()
+    if not ready:
+        raise HTTPException(status_code=503, detail=f"verifier unavailable: {reason}")
+
+    started = time.perf_counter()
+    try:
+        raw, cached_count = await verify_pairs(
+            [(p.a, p.b) for p in req.pairs],
+            req.model,
+        )
+    except VerifyError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    duration = (time.perf_counter() - started) * 1000
+    return VerifyResponse(
+        verdicts=[VerifyVerdict(**v) for v in raw],
+        cachedCount=cached_count,
+        model=req.model or DEFAULT_VERIFY_MODEL,
         durationMs=duration,
     )
 

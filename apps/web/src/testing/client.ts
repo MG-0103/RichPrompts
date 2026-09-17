@@ -24,6 +24,7 @@ export type Health = {
   mode?: string
   real?: { available: boolean; reason?: string | null }
   openai?: { available: boolean; reason?: string | null }
+  verifier?: { available: boolean; reason?: string | null }
 }
 
 export async function clearCache(): Promise<{ cleared: number } | null> {

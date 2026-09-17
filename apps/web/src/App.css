@@ -1432,6 +1432,34 @@ body.splitter-dragging .preview-col { pointer-events: none; }
   font-size: 11px;
 }
 
+.finding-badge.contra {
+  color: #f88;
+  background: #3a1a1a;
+  border: 1px solid #722;
+}
+.contra-hint {
+  margin-left: 8px;
+  font-size: 10px;
+  color: #888;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  font-style: italic;
+}
+
+.verdict-chip {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  padding: 1px 6px;
+  border-radius: 2px;
+}
+.verdict-chip.v-duplicate    { color: #dc9; background: #2a2418; }
+.verdict-chip.v-contradictory { color: #f88; background: #3a1a1a; }
+.verdict-chip.v-related      { color: #9bd; background: #1e2a35; }
+.verdict-chip.v-unrelated    { color: #888; background: #232323; }
+
 /* Duplication view toggle + graph */
 .structure-block-title {
   display: flex;

@@ -3,17 +3,35 @@ import {
   clusterByPairwiseSimilarity,
   cosineSimilarity,
   type DuplicationAnalysis,
+  type DuplicationEdge,
   type Paragraph,
 } from '@richprompt/core'
 import { embedTexts } from '../testing/embed'
+import { verifyPairs, type VerifyVerdict } from '../testing/verify'
 
 const SEMANTIC_THRESHOLD = 0.72   // cosine threshold for cluster edges
 const MIN_CHARS = 60              // same as trigram path
 const MAX_PARAGRAPHS = 250        // safety cap
+const MAX_VERIFY_PAIRS = 40       // cap verifier fan-out per run
+
+/** Labels for edges after LLM verification. Undefined until verified. */
+export type EdgeLabelMap = Record<string, VerifyVerdict>
+
+export interface ContradictionFinding {
+  id: string
+  fromId: string
+  toId: string
+  fromOffset: number
+  toOffset: number
+  reason: string
+  similarity: number
+}
 
 export interface SemanticState {
   active: boolean
   loading: boolean
+  /** Sub-phase of the current run, when loading is true. */
+  phase: 'idle' | 'embedding' | 'clustering' | 'verifying'
   error: string | null
   /** Analysis produced by the last successful deep pass — or null. */
   analysis: DuplicationAnalysis | null
@@ -26,6 +44,16 @@ export interface SemanticState {
   /** Cache hits and misses recorded in the last pass. */
   lastCachedCount: number
   lastFetchedCount: number
+  /** Per-edge verifier verdicts, keyed by "from|to" (id-sorted). */
+  edgeLabels: EdgeLabelMap
+  /** Verified contradictions surfaced as their own findings. */
+  contradictions: ContradictionFinding[]
+  /** True when the /verify path is available on the sidecar and we
+   *  actually ran the pass this activation. */
+  verified: boolean
+  /** Verifier cache stats from the last pass. */
+  lastVerifyCached: number
+  lastVerifyFetched: number
 }
 
 /**
@@ -33,15 +61,21 @@ export interface SemanticState {
  * the sidecar and clusters by cosine similarity. Stays inert until
  * the user activates it.
  */
+function edgeKey(e: DuplicationEdge): string {
+  return e.from < e.to ? `${e.from}|${e.to}` : `${e.to}|${e.from}`
+}
+
 export function useSemanticDuplication(
   paragraphs: Paragraph[],
   sourceHash: string,
+  opts: { verifierAvailable: boolean } = { verifierAvailable: false },
 ): SemanticState & {
   activate: () => Promise<void>
   deactivate: () => void
 } {
   const [active, setActive] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [phase, setPhase] = useState<SemanticState['phase']>('idle')
   const [error, setError] = useState<string | null>(null)
   const [analysis, setAnalysis] = useState<DuplicationAnalysis | null>(null)
   const [computedHash, setComputedHash] = useState('')
@@ -49,6 +83,11 @@ export function useSemanticDuplication(
   const [lastDurationMs, setLastDurationMs] = useState(0)
   const [lastCachedCount, setLastCachedCount] = useState(0)
   const [lastFetchedCount, setLastFetchedCount] = useState(0)
+  const [edgeLabels, setEdgeLabels] = useState<EdgeLabelMap>({})
+  const [contradictions, setContradictions] = useState<ContradictionFinding[]>([])
+  const [verified, setVerified] = useState(false)
+  const [lastVerifyCached, setLastVerifyCached] = useState(0)
+  const [lastVerifyFetched, setLastVerifyFetched] = useState(0)
   const abortRef = useRef<AbortController | null>(null)
 
   const stale = active && analysis !== null && sourceHash !== computedHash
@@ -59,6 +98,9 @@ export function useSemanticDuplication(
     abortRef.current = ctrl
 
     setError(null)
+    setEdgeLabels({})
+    setContradictions([])
+    setVerified(false)
     const eligible = paragraphs.filter(p => p.text.trim().length >= MIN_CHARS)
     if (eligible.length < 2) {
       setAnalysis({ clusters: [], edges: [] })
@@ -67,6 +109,8 @@ export function useSemanticDuplication(
       setLastDurationMs(0)
       setLastCachedCount(0)
       setLastFetchedCount(0)
+      setLastVerifyCached(0)
+      setLastVerifyFetched(0)
       return
     }
     if (eligible.length > MAX_PARAGRAPHS) {
@@ -76,10 +120,16 @@ export function useSemanticDuplication(
 
     setLoading(true)
     try {
-      const res = await embedTexts(eligible.map(p => p.text), { signal: ctrl.signal })
+      // ---------- Embeddings ----------
+      setPhase('embedding')
+      const embedRes = await embedTexts(eligible.map(p => p.text), { signal: ctrl.signal })
+      if (ctrl.signal.aborted) return
+
+      // ---------- Clustering ----------
+      setPhase('clustering')
       const vecById = new Map<string, number[]>()
       for (let i = 0; i < eligible.length; i++) {
-        vecById.set(eligible[i].id, res.vectors[i])
+        vecById.set(eligible[i].id, embedRes.vectors[i])
       }
       const simFn = (a: Paragraph, b: Paragraph): number => {
         const va = vecById.get(a.id)
@@ -97,16 +147,74 @@ export function useSemanticDuplication(
       setAnalysis(result)
       setComputedHash(sourceHash)
       setComputedChars(paragraphs.reduce((a, p) => a + p.text.length, 0))
-      setLastDurationMs(res.durationMs + clusterMs)
-      setLastCachedCount(res.cachedCount)
-      setLastFetchedCount(res.fetchedCount)
+      setLastCachedCount(embedRes.cachedCount)
+      setLastFetchedCount(embedRes.fetchedCount)
+
+      // ---------- Verification ----------
+      let verifyMs = 0
+      if (opts.verifierAvailable && result.edges.length > 0) {
+        setPhase('verifying')
+        const pById = new Map(paragraphs.map(p => [p.id, p]))
+        const pairs = result.edges
+          .slice()
+          .sort((a, b) => b.similarity - a.similarity)
+          .slice(0, MAX_VERIFY_PAIRS)
+          .map(e => ({
+            edge: e,
+            a: pById.get(e.from)!.text,
+            b: pById.get(e.to)!.text,
+          }))
+          .filter(p => p.a && p.b)
+        try {
+          const v = await verifyPairs(
+            pairs.map(p => ({ a: p.a, b: p.b })),
+            { signal: ctrl.signal },
+          )
+          if (ctrl.signal.aborted) return
+          const labels: EdgeLabelMap = {}
+          const contras: ContradictionFinding[] = []
+          for (let i = 0; i < pairs.length; i++) {
+            const verdict = v.verdicts[i]
+            labels[edgeKey(pairs[i].edge)] = verdict
+            if (verdict.label === 'contradictory') {
+              const pa = pById.get(pairs[i].edge.from)!
+              const pb = pById.get(pairs[i].edge.to)!
+              contras.push({
+                id: `contra-${i}`,
+                fromId: pairs[i].edge.from,
+                toId: pairs[i].edge.to,
+                fromOffset: pa.startOffset,
+                toOffset: pb.startOffset,
+                reason: verdict.reason,
+                similarity: pairs[i].edge.similarity,
+              })
+            }
+          }
+          setEdgeLabels(labels)
+          setContradictions(contras)
+          setVerified(true)
+          setLastVerifyCached(v.cachedCount)
+          setLastVerifyFetched(v.fetchedCount)
+          verifyMs = v.durationMs
+        } catch (e) {
+          // Verifier failure is not fatal — keep the semantic clusters,
+          // just surface a warning.
+          if ((e as Error).name !== 'AbortError') {
+            setError(`Verifier failed: ${(e as Error).message}. Showing unverified semantic clusters.`)
+          }
+        }
+      }
+
+      setPhase('idle')
+      setLastDurationMs(embedRes.durationMs + clusterMs + verifyMs)
     } catch (e) {
       if ((e as Error).name === 'AbortError') return
       setError((e as Error).message)
     } finally {
       setLoading(false)
+      setPhase('idle')
     }
-  }, [paragraphs, sourceHash])
+  }, [paragraphs, sourceHash, opts.verifierAvailable])
 
   const activate = useCallback(async () => {
     setActive(true)
@@ -119,19 +227,16 @@ export function useSemanticDuplication(
     setError(null)
   }, [])
 
-  // Auto-invalidate when the doc changes while active. Don't auto-rerun
-  // (that'd burn API calls on every keystroke); let the user click to
-  // refresh from the stale banner.
   useEffect(() => {
     if (!active) return
     if (sourceHash === computedHash) return
-    // Analysis is now stale — presentation layer will surface the
-    // banner + refresh button.
+    // Stale — presentation layer surfaces the banner + refresh button.
   }, [active, sourceHash, computedHash])
 
   return {
     active,
     loading,
+    phase,
     error,
     analysis,
     stale,
@@ -139,6 +244,11 @@ export function useSemanticDuplication(
     lastDurationMs,
     lastCachedCount,
     lastFetchedCount,
+    edgeLabels,
+    contradictions,
+    verified,
+    lastVerifyCached,
+    lastVerifyFetched,
     activate,
     deactivate,
   }
