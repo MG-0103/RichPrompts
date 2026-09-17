@@ -45,5 +45,4 @@ export interface StructureReport {
   noise: import('./noise').NoiseFlag[]
   duplicationClusters: import('./duplication').DuplicationCluster[]
   duplicationEdges: import('./duplication').DuplicationEdge[]
-  extractionCandidates: import('./extract').ExtractionCandidate[]
 }

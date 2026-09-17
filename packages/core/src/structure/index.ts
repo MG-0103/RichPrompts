@@ -2,7 +2,6 @@ import { parseDocument } from '../parser'
 import type { CanonicalSection, DocType } from '../types'
 import { budgetFor, estimateTokens } from './budget'
 import { analyzeDuplication, type DuplicationOptions } from './duplication'
-import { detectExtractionCandidates } from './extract'
 import { detectNoise } from './noise'
 import { splitParagraphs } from './paragraph'
 import type { SectionStats, StructureReport } from './types'
@@ -23,6 +22,9 @@ export type {
   DuplicationAnalysis,
   DuplicationOptions,
 } from './duplication'
+// Extraction detectors remain callable (tests + R1ζ verifier path)
+// but analyzeStructure() no longer includes them in the report.
+// See BACKLOG.md § R1ζ for the resurrection plan.
 export { detectExtractionCandidates } from './extract'
 export type { ExtractionCandidate, ExtractionTarget } from './extract'
 
@@ -80,7 +82,6 @@ export function analyzeStructure(
   const noise = detectNoise(raw, doc.sections)
   const { clusters: duplicationClusters, edges: duplicationEdges } =
     analyzeDuplication(paragraphs, opts.duplication)
-  const extractionCandidates = detectExtractionCandidates(paragraphs)
 
   return {
     chars: raw.length,
@@ -91,7 +92,6 @@ export function analyzeStructure(
     noise,
     duplicationClusters,
     duplicationEdges,
-    extractionCandidates,
   }
 }
 

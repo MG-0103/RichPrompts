@@ -2,6 +2,59 @@
 
 Deferred ideas, revisit before shipping.
 
+---
+
+## Active queue (2026-09-17)
+
+Decided during the "current implementation refinement" discussion.
+
+1. **1.1 Extraction: soft-kill (SHIPPED THIS COMMIT).** Removed from
+   `analyzeStructure()` report + `StructurePanel` UI + CSS. Regex
+   detectors (`detectExtractionCandidates`, `ExtractionCandidate`,
+   `ExtractionTarget`) still exported from `@richprompt/core` so
+   R1ζ can wire them back in behind the LLM verifier. Extraction
+   tests still pass. False-positive rate on real prompts made the
+   feature net-negative — regex can't tell "propose to extract"
+   from "describe existing behavior."
+2. **1.2 Duplication: show WHAT is shared.** LCS + shared n-grams on
+   each cluster row so users don't have to eyeball diffs to see the
+   overlap.
+3. **R1ζ (Bucket 2 full):** OpenAI embeddings via sidecar `/embed`
+   endpoint + web "Deep analyze" + LLM verifier pass that
+   classifies pairs as duplicate / contradictory / related-but-
+   distinct / unrelated. Contradictions become their own finding.
+   Extraction resurrected using the verifier (procedure-to-extract
+   vs. behavior-description).
+
+### Deferred (from the consolidated plan)
+
+- **1.3 Rules-too-lenient tune-up** — severity bumps + 2 threshold
+  tightenings + missing rules (contradictions/success-conditions/
+  examples). ~1 hr. Ships when we return to it.
+- **Bucket 3 (P7) — Workspace file loader.** Approach B locked;
+  ~3½ days. Highest-value real-use enabler once R1ζ is in.
+- **Bucket 4 — Test-runner audit follow-ups:** `.promptfoo.yaml`
+  ingest (4.1), P16 reliability (SSE progress, model UI, cost
+  preview, retries, Docker), P17 distractor injection, P18 CI
+  export as a Promptfoo-compatible CLI.
+- **Bucket 5 — Tests-tab node-graph playback view.** Prerequisite:
+  review `MG-0103/Agent_Builder` client folder for reusable node/
+  edge UI.
+- **Bucket 6 — Editor UX polish:** diagnostic-span highlighting in
+  preview, IndexedDB storage migration when usage crosses 2 MB.
+- **Bucket 7 — Positioning decisions:** phase-by-phase KEEP/CUT/
+  REWORK audit; Phase 9 versioning fate; Phase 6 LLM Review fate.
+- **Bucket 8 — Deep deferred:** prompt↔prompt duplication (needs
+  P7), tool↔skill cross-check, orphan-tool cross-ref, trigram →
+  MiniLM upgrade for Tier-2 (folds into R1ζ), ADK LlmAgent lift.
+
+Full sizing + dependencies were captured in the discussion; not
+re-inlining here to keep this readable. When we return to any
+bucket, refer to the consolidated plan for size estimates.
+
+---
+
+
 ## Strategic audit — reinvention risk & positioning
 
 Reflection during discussion: prior-art overlap wasn't researched before

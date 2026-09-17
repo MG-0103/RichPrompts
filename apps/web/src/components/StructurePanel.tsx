@@ -4,8 +4,6 @@ import {
   type CanonicalSection,
   type DuplicationCluster,
   type DuplicationEdge,
-  type ExtractionCandidate,
-  type ExtractionTarget,
   type NoiseFlag,
   type NoiseKind,
   type Paragraph,
@@ -55,7 +53,7 @@ export function StructurePanel({
 }: Props) {
   const {
     budget, sections, chars, approxTokens,
-    duplicationClusters, duplicationEdges, noise, extractionCandidates, paragraphs,
+    duplicationClusters, duplicationEdges, noise, paragraphs,
   } = report
   const paragraphById = useMemo(() => {
     const m = new Map<string, Paragraph>()
@@ -65,11 +63,9 @@ export function StructurePanel({
 
   const activeDups = duplicationClusters.filter(c => !dismissed.has(c.id))
   const activeNoise = noise.filter(n => !dismissed.has(n.id))
-  const activeExtractions = extractionCandidates.filter(x => !dismissed.has(x.id))
   const dismissedCount =
     duplicationClusters.filter(c => dismissed.has(c.id)).length +
-    noise.filter(n => dismissed.has(n.id)).length +
-    extractionCandidates.filter(x => dismissed.has(x.id)).length
+    noise.filter(n => dismissed.has(n.id)).length
 
   return (
     <div className="structure-panel">
@@ -95,11 +91,6 @@ export function StructurePanel({
       />
       <NoiseList
         flags={activeNoise}
-        onJump={onJump}
-        onDismiss={onToggleDismiss}
-      />
-      <ExtractionList
-        candidates={activeExtractions}
         onJump={onJump}
         onDismiss={onToggleDismiss}
       />
@@ -470,74 +461,6 @@ function DuplicationListInner({
         })}
       </ul>
   )
-}
-
-function ExtractionList({
-  candidates,
-  onJump,
-  onDismiss,
-}: {
-  candidates: ExtractionCandidate[]
-  onJump: (offset: number) => void
-  onDismiss: (id: string) => void
-}) {
-  const [copiedId, setCopiedId] = useState<string | null>(null)
-  if (candidates.length === 0) {
-    return (
-      <div className="structure-block">
-        <div className="structure-block-title">Extraction candidates</div>
-        <div className="structure-empty">
-          No extraction candidates detected. Nothing to split off as a skill, tool, or schema.
-        </div>
-      </div>
-    )
-  }
-  const copy = async (id: string, snippet: string) => {
-    try {
-      await navigator.clipboard.writeText(snippet)
-      setCopiedId(id)
-      window.setTimeout(() => setCopiedId(prev => prev === id ? null : prev), 1500)
-    } catch { /* clipboard denied */ }
-  }
-  return (
-    <div className="structure-block">
-      <div className="structure-block-title">
-        Extraction candidates <span className="count">{candidates.length}</span>
-      </div>
-      <ul className="finding-list">
-        {candidates.map(x => (
-          <li key={x.id} className="finding-row">
-            <div className="finding-header static">
-              <span className={`finding-badge extract target-${x.target}`}>{TARGET_LABELS[x.target]}</span>
-              <span className="extract-confidence" title="Regex-heuristic confidence — not verified">
-                {Math.round(x.confidence * 100)}%
-              </span>
-              <span className="finding-message">
-                <strong>{x.reason}</strong>
-              </span>
-              <span className="finding-actions">
-                <button className="link-btn" onClick={() => onJump(x.range.startOffset)}>jump</button>
-                <button
-                  className="link-btn"
-                  onClick={() => copy(x.id, x.extractedSnippet)}
-                  title="Copy the extracted target snippet to clipboard"
-                >
-                  {copiedId === x.id ? 'copied ✓' : 'copy'}
-                </button>
-                <button className="link-btn" onClick={() => onDismiss(x.id)}>dismiss</button>
-              </span>
-            </div>
-          </li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-const TARGET_LABELS: Record<ExtractionTarget, string> = {
-  schema: 'schema',
-  tool:   'tool',
-  skill:  'skill',
 }
 
 const NOISE_LABELS: Record<NoiseKind, string> = {
