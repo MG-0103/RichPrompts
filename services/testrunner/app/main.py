@@ -23,24 +23,36 @@ from .verify import (
     is_available as verify_available,
     verify_pairs,
 )
+from .verify_extract import (
+    CACHE as VERIFY_EXTRACT_CACHE,
+    DEFAULT_MODEL as DEFAULT_VERIFY_EXTRACT_MODEL,
+    MAX_CANDIDATES as VERIFY_EXTRACT_MAX,
+    MAX_CHARS_PER_TEXT as VERIFY_EXTRACT_MAX_CHARS,
+    VerifyExtractError,
+    is_available as verify_extract_available,
+    verify_extractions,
+)
 from .mock_runner import run_mock
 from .real_runner import is_available as real_available, run_real
 from .schemas import (
     EmbedRequest,
     EmbedResponse,
+    ExtractionVerdict,
     RegistryEntry,
     TestCase,
     TestResult,
     TestRunConfig,
     TestRunRequest,
     TestRunResponse,
+    VerifyExtractionRequest,
+    VerifyExtractionResponse,
     VerifyRequest,
     VerifyResponse,
     VerifyVerdict,
 )
 from .strip import strip_entries
 
-SIDECAR_VERSION = "0.6.0"
+SIDECAR_VERSION = "0.7.0"
 
 app = FastAPI(title="RichPrompt Test Runner", version=SIDECAR_VERSION)
 
@@ -58,6 +70,7 @@ def health() -> dict:
     real_ok, real_reason = real_available()
     embed_ok, embed_reason = embed_available()
     verify_ok, verify_reason = verify_available()
+    verify_extract_ok, verify_extract_reason = verify_extract_available()
     return {
         "ok": True,
         "version": SIDECAR_VERSION,
@@ -66,10 +79,12 @@ def health() -> dict:
         # openai path covers both embeddings and verifier (same key).
         "openai": {"available": embed_ok, "reason": embed_reason},
         "verifier": {"available": verify_ok, "reason": verify_reason},
+        "extractionVerifier": {"available": verify_extract_ok, "reason": verify_extract_reason},
         "cache": {
             "size": CACHE.size(),
             "embed": EMBED_CACHE.size(),
             "verify": VERIFY_CACHE.size(),
+            "verifyExtract": VERIFY_EXTRACT_CACHE.size(),
         },
     }
 
@@ -80,6 +95,7 @@ def clear_cache() -> dict:
         "cleared": CACHE.clear(),
         "embed_cleared": EMBED_CACHE.clear(),
         "verify_cleared": VERIFY_CACHE.clear(),
+        "verify_extract_cleared": VERIFY_EXTRACT_CACHE.clear(),
     }
 
 
@@ -159,6 +175,49 @@ async def verify(req: VerifyRequest) -> VerifyResponse:
         verdicts=[VerifyVerdict(**v) for v in raw],
         cachedCount=cached_count,
         model=req.model or DEFAULT_VERIFY_MODEL,
+        durationMs=duration,
+    )
+
+
+@app.post("/verify-extraction", response_model=VerifyExtractionResponse)
+async def verify_extraction(req: VerifyExtractionRequest) -> VerifyExtractionResponse:
+    if len(req.candidates) == 0:
+        return VerifyExtractionResponse(
+            verdicts=[],
+            cachedCount=0,
+            model=req.model or DEFAULT_VERIFY_EXTRACT_MODEL,
+            durationMs=0.0,
+        )
+    if len(req.candidates) > VERIFY_EXTRACT_MAX:
+        raise HTTPException(
+            status_code=413,
+            detail=f"too many candidates in one call: {len(req.candidates)} > {VERIFY_EXTRACT_MAX}",
+        )
+    for i, c in enumerate(req.candidates):
+        if len(c.text) > VERIFY_EXTRACT_MAX_CHARS * 2:
+            raise HTTPException(
+                status_code=413,
+                detail=f"candidates[{i}] text exceeds {VERIFY_EXTRACT_MAX_CHARS * 2}",
+            )
+    ready, reason = verify_extract_available()
+    if not ready:
+        raise HTTPException(status_code=503, detail=f"extraction verifier unavailable: {reason}")
+
+    started = time.perf_counter()
+    try:
+        raw, cached_count = await verify_extractions(
+            [{"text": c.text, "target": c.target, "reason": c.reason} for c in req.candidates],
+            req.toolNames,
+            req.skillNames,
+            req.model,
+        )
+    except VerifyExtractError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    duration = (time.perf_counter() - started) * 1000
+    return VerifyExtractionResponse(
+        verdicts=[ExtractionVerdict(**v) for v in raw],
+        cachedCount=cached_count,
+        model=req.model or DEFAULT_VERIFY_EXTRACT_MODEL,
         durationMs=duration,
     )
 

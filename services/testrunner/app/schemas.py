@@ -117,3 +117,31 @@ class VerifyResponse(BaseModel):
     cachedCount: int
     model: str
     durationMs: float
+
+
+class ExtractionCandidateIn(BaseModel):
+    text: str
+    target: Literal["schema", "tool", "skill"]
+    reason: str = ""
+
+
+class VerifyExtractionRequest(BaseModel):
+    candidates: list[ExtractionCandidateIn]
+    toolNames: list[str] = []
+    skillNames: list[str] = []
+    model: str | None = None
+
+
+ExtractDecision = Literal["extract", "reject"]
+
+
+class ExtractionVerdict(BaseModel):
+    decision: ExtractDecision
+    reason: str
+
+
+class VerifyExtractionResponse(BaseModel):
+    verdicts: list[ExtractionVerdict]
+    cachedCount: int
+    model: str
+    durationMs: float

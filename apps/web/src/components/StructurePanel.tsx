@@ -18,6 +18,7 @@ const DuplicationGraph = lazy(() =>
 import type {
   ContradictionFinding,
   SemanticState,
+  VerifiedExtraction,
 } from '../hooks/useSemanticDuplication'
 
 interface Props {
@@ -106,6 +107,12 @@ export function StructurePanel({
       {usingSemantic && semantic.verified && semantic.contradictions.length > 0 && (
         <ContradictionList
           items={semantic.contradictions}
+          onJump={onJump}
+        />
+      )}
+      {usingSemantic && semantic.verifiedExtractions.length > 0 && (
+        <ExtractionList
+          items={semantic.verifiedExtractions}
           onJump={onJump}
         />
       )}
@@ -460,6 +467,53 @@ function DuplicationSection({
           onDismiss={onDismiss}
         />
       )}
+    </div>
+  )
+}
+
+function ExtractionList({
+  items,
+  onJump,
+}: {
+  items: VerifiedExtraction[]
+  onJump: (offset: number) => void
+}) {
+  const [copiedId, setCopiedId] = useState<string | null>(null)
+  const copy = async (id: string, snippet: string) => {
+    try {
+      await navigator.clipboard.writeText(snippet)
+      setCopiedId(id)
+      window.setTimeout(() => setCopiedId(prev => prev === id ? null : prev), 1500)
+    } catch { /* clipboard denied */ }
+  }
+  return (
+    <div className="structure-block">
+      <div className="structure-block-title">
+        Extraction candidates <span className="count">{items.length}</span>
+        <span className="contra-hint">verified by LLM</span>
+      </div>
+      <ul className="finding-list">
+        {items.map(({ candidate: x, reason }) => (
+          <li key={x.id} className="finding-row">
+            <div className="finding-header static">
+              <span className={`finding-badge extract target-${x.target}`}>{x.target}</span>
+              <span className="finding-message">
+                <strong>{reason || x.reason}</strong>
+              </span>
+              <span className="finding-actions">
+                <button className="link-btn" onClick={() => onJump(x.range.startOffset)}>jump</button>
+                <button
+                  className="link-btn"
+                  onClick={() => copy(x.id, x.extractedSnippet)}
+                  title="Copy the extracted target snippet to clipboard"
+                >
+                  {copiedId === x.id ? 'copied ✓' : 'copy'}
+                </button>
+              </span>
+            </div>
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }

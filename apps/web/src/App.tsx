@@ -90,10 +90,21 @@ function App() {
   const structureHash = useMemo(() => `${docType}:${hashContent(source)}`, [docType, source])
   const verifierReady =
     tests.sidecar.state === 'up' ? Boolean(tests.sidecar.verifier?.available) : false
+  const registryNames = useMemo(() => {
+    const targetsInline = callTargets(sampleRegistryTools, sampleRegistrySkills)
+    return {
+      toolNames: targetsInline.filter(t => t.kind === 'tool').map(t => t.name),
+      skillNames: targetsInline.filter(t => t.kind === 'skill').map(t => t.name),
+    }
+  }, [])
   const semantic = useSemanticDuplication(
     structureReport?.paragraphs ?? [],
     structureHash,
-    { verifierAvailable: verifierReady },
+    {
+      verifierAvailable: verifierReady,
+      toolNames: registryNames.toolNames,
+      skillNames: registryNames.skillNames,
+    },
   )
   const openaiReady =
     tests.sidecar.state === 'up' ? Boolean(tests.sidecar.openai?.available) : false

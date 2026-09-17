@@ -2,12 +2,15 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   clusterByPairwiseSimilarity,
   cosineSimilarity,
+  detectExtractionCandidates,
   type DuplicationAnalysis,
   type DuplicationEdge,
+  type ExtractionCandidate,
   type Paragraph,
 } from '@richprompt/core'
 import { embedTexts } from '../testing/embed'
 import { verifyPairs, type VerifyVerdict } from '../testing/verify'
+import { verifyExtractionCandidates } from '../testing/verifyExtract'
 
 const SEMANTIC_THRESHOLD = 0.72   // cosine threshold for cluster edges
 const MIN_CHARS = 60              // same as trigram path
@@ -25,6 +28,11 @@ export interface ContradictionFinding {
   toOffset: number
   reason: string
   similarity: number
+}
+
+export interface VerifiedExtraction {
+  candidate: ExtractionCandidate
+  reason: string
 }
 
 export interface SemanticState {
@@ -48,6 +56,10 @@ export interface SemanticState {
   edgeLabels: EdgeLabelMap
   /** Verified contradictions surfaced as their own findings. */
   contradictions: ContradictionFinding[]
+  /** Extraction candidates the verifier said to keep. Empty when the
+   *  extraction verifier wasn't run (either not available or no regex
+   *  candidates existed). */
+  verifiedExtractions: VerifiedExtraction[]
   /** True when the /verify path is available on the sidecar and we
    *  actually ran the pass this activation. */
   verified: boolean
@@ -68,7 +80,11 @@ function edgeKey(e: DuplicationEdge): string {
 export function useSemanticDuplication(
   paragraphs: Paragraph[],
   sourceHash: string,
-  opts: { verifierAvailable: boolean } = { verifierAvailable: false },
+  opts: {
+    verifierAvailable: boolean
+    toolNames?: string[]
+    skillNames?: string[]
+  } = { verifierAvailable: false },
 ): SemanticState & {
   activate: () => Promise<void>
   deactivate: () => void
@@ -85,6 +101,7 @@ export function useSemanticDuplication(
   const [lastFetchedCount, setLastFetchedCount] = useState(0)
   const [edgeLabels, setEdgeLabels] = useState<EdgeLabelMap>({})
   const [contradictions, setContradictions] = useState<ContradictionFinding[]>([])
+  const [verifiedExtractions, setVerifiedExtractions] = useState<VerifiedExtraction[]>([])
   const [verified, setVerified] = useState(false)
   const [lastVerifyCached, setLastVerifyCached] = useState(0)
   const [lastVerifyFetched, setLastVerifyFetched] = useState(0)
@@ -100,6 +117,7 @@ export function useSemanticDuplication(
     setError(null)
     setEdgeLabels({})
     setContradictions([])
+    setVerifiedExtractions([])
     setVerified(false)
     const eligible = paragraphs.filter(p => p.text.trim().length >= MIN_CHARS)
     if (eligible.length < 2) {
@@ -205,8 +223,45 @@ export function useSemanticDuplication(
         }
       }
 
+      // ---------- Extraction verification ----------
+      let extractMs = 0
+      if (opts.verifierAvailable) {
+        const rawCandidates = detectExtractionCandidates(paragraphs)
+        if (rawCandidates.length > 0) {
+          setPhase('verifying')
+          try {
+            const evres = await verifyExtractionCandidates(
+              rawCandidates.map(c => ({
+                text: paragraphs.find(p => p.id === c.paragraphIds[0])?.text ?? '',
+                target: c.target,
+                reason: c.reason,
+              })).filter(c => c.text.length > 0),
+              opts.toolNames ?? [],
+              opts.skillNames ?? [],
+              { signal: ctrl.signal },
+            )
+            if (ctrl.signal.aborted) return
+            const kept: VerifiedExtraction[] = []
+            for (let i = 0; i < rawCandidates.length; i++) {
+              const verdict = evres.verdicts[i]
+              if (verdict?.decision === 'extract') {
+                kept.push({ candidate: rawCandidates[i], reason: verdict.reason })
+              }
+            }
+            setVerifiedExtractions(kept)
+            extractMs = evres.durationMs
+          } catch (e) {
+            // Non-fatal; keep duplication results.
+            if ((e as Error).name !== 'AbortError') {
+              // Only warn if not already flagged by duplication verifier.
+              // The main error state is prioritized for the more central signal.
+            }
+          }
+        }
+      }
+
       setPhase('idle')
-      setLastDurationMs(embedRes.durationMs + clusterMs + verifyMs)
+      setLastDurationMs(embedRes.durationMs + clusterMs + verifyMs + extractMs)
     } catch (e) {
       if ((e as Error).name === 'AbortError') return
       setError((e as Error).message)
@@ -246,6 +301,7 @@ export function useSemanticDuplication(
     lastFetchedCount,
     edgeLabels,
     contradictions,
+    verifiedExtractions,
     verified,
     lastVerifyCached,
     lastVerifyFetched,

@@ -19,12 +19,16 @@ Decided during the "current implementation refinement" discussion.
 2. **1.2 Duplication: show WHAT is shared.** LCS + shared n-grams on
    each cluster row so users don't have to eyeball diffs to see the
    overlap.
-3. **R1ζ (Bucket 2 full):** OpenAI embeddings via sidecar `/embed`
-   endpoint + web "Deep analyze" + LLM verifier pass that
-   classifies pairs as duplicate / contradictory / related-but-
-   distinct / unrelated. Contradictions become their own finding.
-   Extraction resurrected using the verifier (procedure-to-extract
-   vs. behavior-description).
+3. **R1ζ (Bucket 2 full) — SHIPPED.** OpenAI embeddings via sidecar
+   `/embed`, web "Deep analyze" that computes cosine + clusters,
+   LLM `/verify` classifier over cluster edges (duplicate /
+   contradictory / related / unrelated), a Contradictions block
+   surfaced as its own finding, and a resurrected Extraction
+   candidates block behind the extraction verifier
+   (`/verify-extraction`) that filters regex false positives.
+   All four passes wired into a single "Deep Analyze" flow with
+   staged UI phases: embedding → clustering → verifying.
+   Cost per 85k-prompt Deep Analyze: ~$0.001-0.002 total.
 
 ### Deferred (from the consolidated plan)
 
