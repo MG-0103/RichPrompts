@@ -227,6 +227,68 @@ sidecar owns anything model-touching. Contract in
   passRate regression. Companion GitHub Action.
 
 
+## Autofix — "Fix" button on suggestions (NOT SHIPPED — design discussion)
+
+Add executable fix actions to findings across the Problems panel
+(linter diagnostics) and Structure panel (noise / duplication /
+extraction). Half the infrastructure already exists — Phase 2 wired
+a Monaco `registerCodeActionProvider` for quick fixes and the
+`Diagnostic` type has a `fix?` text field. Missing piece: a
+structured `FixAction` with an `apply(model)` that returns editor
+edits, plus a shared `applyFix()` helper both panels call.
+
+**Categorized by fix-ability:**
+
+Trivially fixable (deterministic range operations, safe, ~0.5 day
+total for all seven):
+- HTML comment → delete range
+- TODO / FIXME markers → delete range
+- Placeholder tokens (`[REDACTED]`) → delete or highlight
+- Empty XML tags → delete range
+- Blank run (3+ blank lines) → collapse to one
+- Boilerplate tail phrase → delete range
+- `prompt/missing-data-delimiter` → wrap `{{var}}` in `<input>…</input>`
+
+Medium — deterministic but structural (~0.5 day):
+- `prompt/undefined-variable` → add name to frontmatter `variables:`
+- `prompt/missing-sections` → insert `# Role`/`# Task`/etc. heading
+  skeleton at top of doc (user fills body)
+
+Cluster-merge autofix (~0.5 day, deterministic path):
+- Duplication cluster → "keep first, delete others" behind a confirm
+  dialog with a preview of what stays. Honest about what it's doing;
+  user reviews before applying.
+
+Hard — LLM-required rewrites (~2-3 days, deferred):
+- `prompt/critical-must-inflation`, `negative-only-instructions`,
+  `under-specified-trigger`, `instruction-stacking` — rewriting
+  sentences to remove anti-patterns. Requires a sidecar `/rewrite`
+  endpoint + preview-then-apply UX. Never one-click.
+
+Blocked:
+- Extraction candidate fix (create new `.tool.json` or `SKILL.md`
+  file) needs **P7 workspace loader**. Currently copy-to-clipboard
+  only.
+
+**Suggested phases when we pick this up:**
+
+- **F1 — Safe deletions** (0.5 day): all 6 noise categories +
+  `missing-data-delimiter`. Fix button on each row + Monaco Cmd+.
+  quick-fix menu. Undo = plain editor undo, zero risk.
+- **F2 — Structural inserts** (0.5 day): `undefined-variable` +
+  `missing-sections`.
+- **F3 — Cluster merge** (0.5 day): deterministic "keep first" with
+  confirm dialog + preview.
+- **F4 — LLM rewrites** (2-3 days): `/rewrite` endpoint + diff
+  preview UX. Opt-in per finding.
+- **F5 — Extraction file creation** (blocked on P7).
+
+**Shared code (~40 lines):** `FixAction` type in `@richprompt/core`
++ `applyFix(model, action)` helper both panels call. Keeps the
+UX identical across Problems and Structure panels.
+
+---
+
 ## Tests tab — node-graph playback view (NOT SHIPPED — design discussion)
 
 Idea (from discussion): add a graph-based playback view to the Tests
