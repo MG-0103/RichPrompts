@@ -1,5 +1,4 @@
-import { ChevronDown, MoreHorizontal, FlaskConical, BookMarked, Settings } from 'lucide-react'
-import type { DocType } from '@richprompt/core'
+import { MoreHorizontal, FlaskConical, BookMarked, Settings, Sun, Moon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -18,12 +17,7 @@ import {
   type DocView,
   type WorkspaceView,
 } from './views'
-
-const DOC_LABELS: Record<DocType, string> = {
-  prompt: 'Prompt',
-  tool: 'Tool',
-  skill: 'Skill',
-}
+import type { Theme } from './useTheme'
 
 const WORKSPACE_ICONS: Record<WorkspaceView, typeof FlaskConical> = {
   tests: FlaskConical,
@@ -33,18 +27,18 @@ const WORKSPACE_ICONS: Record<WorkspaceView, typeof FlaskConical> = {
 
 interface Props {
   active: ActiveView
-  docType: DocType
-  onDocTypeChange: (d: DocType) => void
   onSelectDocView: (view: DocView) => void
   onSelectWorkspaceView: (view: WorkspaceView) => void
+  theme: Theme
+  onToggleTheme: () => void
 }
 
 export function TopNavbar({
   active,
-  docType,
-  onDocTypeChange,
   onSelectDocView,
   onSelectWorkspaceView,
+  theme,
+  onToggleTheme,
 }: Props) {
   const currentDocView = active.scope === 'doc' ? active.view : null
   const currentWorkspaceView = active.scope === 'workspace' ? active.view : null
@@ -54,26 +48,6 @@ export function TopNavbar({
       <div className="flex items-center gap-2 pr-2">
         <span className="text-sm font-semibold tracking-tight">RichPrompt</span>
       </div>
-
-      <Separator orientation="vertical" className="h-6" />
-
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="sm" className="gap-1 px-2">
-            <span className="text-sm">{DOC_LABELS[docType]}</span>
-            <ChevronDown className="h-3.5 w-3.5 opacity-60" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="min-w-40">
-          <DropdownMenuLabel>Doc</DropdownMenuLabel>
-          <DropdownMenuSeparator />
-          {(['prompt', 'tool', 'skill'] as DocType[]).map(t => (
-            <DropdownMenuItem key={t} onSelect={() => onDocTypeChange(t)}>
-              <span className={cn(t === docType && 'font-medium')}>{DOC_LABELS[t]}</span>
-            </DropdownMenuItem>
-          ))}
-        </DropdownMenuContent>
-      </DropdownMenu>
 
       <Separator orientation="vertical" className="h-6" />
 
@@ -95,6 +69,16 @@ export function TopNavbar({
       </nav>
 
       <div className="ml-auto flex items-center gap-0.5">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8"
+          onClick={onToggleTheme}
+          title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
+        >
+          {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+        </Button>
+        <Separator orientation="vertical" className="mx-1 h-6" />
         {WORKSPACE_VIEWS.map(v => {
           const Icon = WORKSPACE_ICONS[v.key]
           return (

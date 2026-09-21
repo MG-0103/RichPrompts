@@ -27,6 +27,7 @@ import type { RuleConfig } from '@richprompt/core'
 import { TooltipProvider } from './components/ui/tooltip'
 import { AppShell } from './shell/AppShell'
 import { useNavigation } from './shell/useNavigation'
+import { useTheme } from './shell/useTheme'
 import { viewLabel } from './shell/views'
 import type { Crumb } from './shell/Breadcrumbs'
 import { Placeholder } from './views/Placeholder'
@@ -52,6 +53,7 @@ const DOC_LABEL: Record<DocType, string> = {
 
 function App() {
   const nav = useNavigation()
+  const { theme, toggleTheme } = useTheme()
   const [sources, setSources] = useState<Record<DocType, string>>(FIXTURES)
   const [config, setConfigState] = useState<RuleConfig>(() => loadConfig())
   const updateConfig = (cfg: RuleConfig) => { setConfigState(cfg); saveConfig(cfg) }
@@ -204,9 +206,11 @@ function App() {
               ref={editorRef}
               source={source}
               docType={nav.docType}
+              onDocTypeChange={nav.changeDocType}
               diagnostics={diagnostics}
               sections={sections}
               onChange={onEditorChange}
+              theme={theme}
             />
           )
         case 'structure':
@@ -316,15 +320,16 @@ function App() {
     <TooltipProvider delayDuration={200}>
       <AppShell
         active={nav.active}
-        docType={nav.docType}
-        onDocTypeChange={nav.changeDocType}
         onSelectDocView={nav.selectDocView}
         onSelectWorkspaceView={nav.selectWorkspaceView}
         crumbs={crumbs}
         canGoBack={nav.canGoBack}
         onBack={nav.back}
         diagnostics={diagnostics}
+        sections={sections}
         onJumpDiagnostic={onJumpDiagnostic}
+        theme={theme}
+        onToggleTheme={toggleTheme}
       >
         {view}
       </AppShell>

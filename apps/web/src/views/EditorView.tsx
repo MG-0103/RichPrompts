@@ -4,6 +4,7 @@ import type { editor } from 'monaco-editor'
 import { Eye, EyeOff } from 'lucide-react'
 import type { Diagnostic, DocType, Section } from '@richprompt/core'
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import {
   diagnosticsToMarkers,
   MARKER_OWNER,
@@ -26,13 +27,17 @@ export interface EditorController {
 interface Props {
   source: string
   docType: DocType
+  onDocTypeChange: (d: DocType) => void
   diagnostics: Diagnostic[]
   sections: Section[]
   onChange: (next: string) => void
+  theme: 'light' | 'dark'
 }
 
+const DOC_TYPES: DocType[] = ['prompt', 'tool', 'skill']
+
 export const EditorView = forwardRef<EditorController, Props>(function EditorView(
-  { source, docType, diagnostics, sections, onChange },
+  { source, docType, onDocTypeChange, diagnostics, sections, onChange, theme },
   ref,
 ) {
   const language = LANGUAGE_FOR[docType]
@@ -177,6 +182,22 @@ export const EditorView = forwardRef<EditorController, Props>(function EditorVie
   return (
     <div className="flex h-full min-h-0 flex-col">
       <div className="flex h-9 shrink-0 items-center justify-end gap-2 border-b border-border px-3">
+        <div className="flex items-center gap-0.5 rounded-md border border-border p-0.5">
+          {DOC_TYPES.map(t => (
+            <button
+              key={t}
+              onClick={() => onDocTypeChange(t)}
+              className={cn(
+                'rounded-sm px-2 py-0.5 text-[11px] capitalize transition-colors',
+                docType === t
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground hover:text-foreground',
+              )}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
         <Button
           variant="ghost"
           size="sm"
@@ -205,7 +226,7 @@ export const EditorView = forwardRef<EditorController, Props>(function EditorVie
             value={source}
             onChange={v => onChange(v ?? '')}
             onMount={handleMount}
-            theme="vs-dark"
+            theme={theme === 'dark' ? 'vs-dark' : 'vs'}
             options={{ minimap: { enabled: false }, wordWrap: 'on', fontSize: 14 }}
           />
         </div>
