@@ -6,6 +6,23 @@ Deferred ideas, revisit before shipping.
 
 ## Recently-added checks (2026-09-21)
 
+- [ ] **Model-specific rules — deferred pending cross-model story.**
+  Both rules are net-positive but skew toward Anthropic's specific
+  guidance. Users may target GPT, Gemini, Llama, etc. Revisit when we
+  have a per-target-model toggle or when we accept that these are
+  "always net-positive advice" and ship as `info`.
+  - **`prompt/prefer-xml-structure`** — fires on long prompts (>2000
+    chars) that use only markdown headings for canonical sections and
+    have < 2 XML tags. Message nudges toward `<role>`, `<task>`,
+    `<output_format>` wrappers. Anthropic reports 20-40% consistency
+    lift; other providers see smaller but non-negative gains.
+  - **`prompt/cache-hostile-order`** — fires when a `{{var}}` appears
+    in the first ~30% of the prompt AND ≥ 500 chars of static content
+    follows. Message: "variables before static instructions defeats
+    prompt caching (Anthropic / OpenAI / Gemini all match by prefix)."
+    Fix hint: static content first, variables last. Value depends on
+    the user re-running the prompt; harmless when they don't.
+
 - [ ] **Verify Monaco diagnostic hover still fires post-trim.** After
   moving to the lean Monaco setup (markdown + json only, loader
   swapped to our pre-imported instance) I did not observe a live
