@@ -3,8 +3,24 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
 import rehypeHighlight from 'rehype-highlight'
+import bash from 'highlight.js/lib/languages/bash'
+import javascript from 'highlight.js/lib/languages/javascript'
+import json from 'highlight.js/lib/languages/json'
+import markdown from 'highlight.js/lib/languages/markdown'
+import python from 'highlight.js/lib/languages/python'
+import shell from 'highlight.js/lib/languages/shell'
+import sql from 'highlight.js/lib/languages/sql'
+import typescript from 'highlight.js/lib/languages/typescript'
+import xml from 'highlight.js/lib/languages/xml'
+import yaml from 'highlight.js/lib/languages/yaml'
 import { classifyCanonical, type CanonicalSection, type DocType } from '@richprompt/core'
 import 'highlight.js/styles/github-dark.css'
+
+// Only register the grammars we actually expect to see in prompts/skills.
+// Everything else falls back to plain text.
+const HIGHLIGHT_LANGS = {
+  bash, javascript, json, markdown, python, shell, sql, typescript, xml, yaml,
+} as const
 
 const CANONICAL_STYLE: Record<CanonicalSection, string> = {
   role: 'border-sky-500/50 text-sky-600 dark:text-sky-400 bg-sky-500/10',
@@ -138,7 +154,10 @@ export const PreviewPane = forwardRef<HTMLDivElement, Props>(function PreviewPan
         <div className="prose prose-sm dark:prose-invert max-w-none p-4 prose-pre:bg-muted prose-code:before:hidden prose-code:after:hidden">
           <ReactMarkdown
             remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeSanitize, rehypeHighlight]}
+            rehypePlugins={[
+              rehypeSanitize,
+              [rehypeHighlight, { detect: true, languages: HIGHLIGHT_LANGS }],
+            ]}
             components={MD_COMPONENTS}
           >
             {source}

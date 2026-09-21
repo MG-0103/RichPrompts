@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import {
   badPrompt,
   badTool,
@@ -32,14 +32,41 @@ import { rightPaneLabel, workspaceLabel } from './shell/views'
 import type { Crumb } from './shell/Breadcrumbs'
 import { EditorPane, type EditorController } from './views/EditorPane'
 import { Workbench } from './views/Workbench'
-import { PreviewPane } from './views/PreviewPane'
-import { StructureView } from './views/StructureView'
-import { HistoryView } from './views/HistoryView'
-import { LLMReviewView } from './views/LLMReviewView'
-import { TestsView } from './views/TestsView'
-import { RegistryView } from './views/RegistryView'
-import { SettingsView } from './views/SettingsView'
 import { Placeholder } from './views/Placeholder'
+import { Loader2 } from 'lucide-react'
+
+// Heavy views load on demand: PreviewPane pulls react-markdown +
+// rehype-highlight (~2 MB of syntax grammars); StructureView pulls the
+// duplication + budget UI; TestsView pulls the results table; etc.
+const PreviewPane = lazy(() =>
+  import('./views/PreviewPane').then(m => ({ default: m.PreviewPane })),
+)
+const StructureView = lazy(() =>
+  import('./views/StructureView').then(m => ({ default: m.StructureView })),
+)
+const HistoryView = lazy(() =>
+  import('./views/HistoryView').then(m => ({ default: m.HistoryView })),
+)
+const LLMReviewView = lazy(() =>
+  import('./views/LLMReviewView').then(m => ({ default: m.LLMReviewView })),
+)
+const TestsView = lazy(() =>
+  import('./views/TestsView').then(m => ({ default: m.TestsView })),
+)
+const RegistryView = lazy(() =>
+  import('./views/RegistryView').then(m => ({ default: m.RegistryView })),
+)
+const SettingsView = lazy(() =>
+  import('./views/SettingsView').then(m => ({ default: m.SettingsView })),
+)
+
+function ViewFallback() {
+  return (
+    <div className="flex h-full items-center justify-center p-8 text-muted-foreground">
+      <Loader2 className="h-5 w-5 animate-spin" />
+    </div>
+  )
+}
 
 const FIXTURES: Record<DocType, string> = {
   prompt: badPrompt,
@@ -224,7 +251,7 @@ function App() {
     ? [{ label: 'Workspace' }, { label: workspaceLabel(nav.active.view) }]
     : [{ label: DOC_LABEL[nav.docType] }, { label: rightPaneLabel(nav.rightPane) }]
 
-  const rightContent = (() => {
+  const rightContentInner = (() => {
     switch (nav.rightPane) {
       case 'preview':
         return (
@@ -285,6 +312,8 @@ function App() {
     }
   })()
 
+  const rightContent = <Suspense fallback={<ViewFallback />}>{rightContentInner}</Suspense>
+
   const workbench = (
     <Workbench
       editor={
@@ -308,7 +337,7 @@ function App() {
     />
   )
 
-  const mainView = (() => {
+  const mainViewInner = (() => {
     if (nav.active.scope === 'workbench') return workbench
     switch (nav.active.view) {
       case 'tests':
@@ -363,6 +392,8 @@ function App() {
         )
     }
   })()
+
+  const mainView = <Suspense fallback={<ViewFallback />}>{mainViewInner}</Suspense>
 
   return (
     <TooltipProvider delayDuration={200}>
