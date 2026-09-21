@@ -512,11 +512,6 @@ function DuplicationCard({
           <Badge variant="outline" className="text-[10px]">
             {usingSemantic ? 'semantic' : 'trigram'}
           </Badge>
-          {usingSemantic && semantic.verified && (
-            <Badge variant="outline" className="text-[10px]" title="Edges the verifier labelled 'related' or 'unrelated' were dropped and clusters re-computed.">
-              verifier-pruned
-            </Badge>
-          )}
           {usingSemantic && semantic.fromCache && !semantic.loading && (
             <Badge variant="outline" className="text-[10px]" title="Rehydrated from localStorage — no fresh embed/verify call this session.">
               cached
