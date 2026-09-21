@@ -1,9 +1,12 @@
-import { useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   badPrompt,
   badTool,
   badSkill,
+  parseDocument,
+  type Diagnostic,
   type DocType,
+  type Section,
 } from '@richprompt/core'
 import { useLinter } from './hooks/useLinter'
 import { loadConfig } from './persistence/config'
@@ -14,6 +17,7 @@ import { useNavigation } from './shell/useNavigation'
 import { viewLabel } from './shell/views'
 import type { Crumb } from './shell/Breadcrumbs'
 import { Placeholder } from './views/Placeholder'
+import { EditorView, type EditorController } from './views/EditorView'
 
 const FIXTURES: Record<DocType, string> = {
   prompt: badPrompt,
@@ -33,9 +37,21 @@ function App() {
   const [config] = useState<RuleConfig>(() => loadConfig())
   const source = sources[nav.docType]
   const diagnostics = useLinter(source, nav.docType, config)
+  const sections: Section[] = useMemo(
+    () => nav.docType === 'tool' ? [] : parseDocument(source, nav.docType).sections,
+    [source, nav.docType],
+  )
+  const editorRef = useRef<EditorController | null>(null)
 
-  // Suppress unused-var warnings for setSources until N3 wires the editor back.
-  void setSources
+  const onEditorChange = (next: string) => {
+    setSources(s => ({ ...s, [nav.docType]: next }))
+  }
+  const onJumpDiagnostic = (d: Diagnostic) => {
+    if (nav.active.scope !== 'doc' || nav.active.view !== 'editor') {
+      nav.selectDocView('editor')
+    }
+    requestAnimationFrame(() => editorRef.current?.jumpTo(d))
+  }
 
   const crumbs: Crumb[] = (() => {
     if (nav.active.scope === 'doc') {
@@ -47,7 +63,37 @@ function App() {
     return [{ label: 'Workspace' }, { label: viewLabel(nav.active.view) }]
   })()
 
-  const view = renderView(nav.active)
+  const view = (() => {
+    if (nav.active.scope === 'doc') {
+      switch (nav.active.view) {
+        case 'editor':
+          return (
+            <EditorView
+              ref={editorRef}
+              source={source}
+              docType={nav.docType}
+              diagnostics={diagnostics}
+              sections={sections}
+              onChange={onEditorChange}
+            />
+          )
+        case 'structure':
+          return <Placeholder title="Structure" note="Structure panel migration lands in N4." />
+        case 'history':
+          return <Placeholder title="History" note="History view migration lands in N6." />
+        case 'review':
+          return <Placeholder title="LLM Review" note="LLM Review migration lands in N7." />
+      }
+    }
+    switch (nav.active.view) {
+      case 'tests':
+        return <Placeholder title="Tests" note="Tests view migration lands in N5." />
+      case 'registry':
+        return <Placeholder title="Registry" note="Registry migration lands in N8." />
+      case 'settings':
+        return <Placeholder title="Settings" note="Settings migration lands in N9." />
+    }
+  })()
 
   return (
     <TooltipProvider delayDuration={200}>
@@ -61,34 +107,12 @@ function App() {
         canGoBack={nav.canGoBack}
         onBack={nav.back}
         diagnostics={diagnostics}
+        onJumpDiagnostic={onJumpDiagnostic}
       >
         {view}
       </AppShell>
     </TooltipProvider>
   )
-}
-
-function renderView(active: ReturnType<typeof useNavigation>['active']) {
-  if (active.scope === 'doc') {
-    switch (active.view) {
-      case 'editor':
-        return <Placeholder title="Editor" note="The Monaco editor lands in N3." />
-      case 'structure':
-        return <Placeholder title="Structure" note="Structure panel migration lands in N4." />
-      case 'history':
-        return <Placeholder title="History" note="History view migration lands in N6." />
-      case 'review':
-        return <Placeholder title="LLM Review" note="LLM Review migration lands in N7." />
-    }
-  }
-  switch (active.view) {
-    case 'tests':
-      return <Placeholder title="Tests" note="Tests view migration lands in N5." />
-    case 'registry':
-      return <Placeholder title="Registry" note="Registry migration lands in N8." />
-    case 'settings':
-      return <Placeholder title="Settings" note="Settings migration lands in N9." />
-  }
 }
 
 export default App
