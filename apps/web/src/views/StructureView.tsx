@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { ChevronRight, Copy, Check, RefreshCw, Sparkles, Loader2, AlertCircle } from 'lucide-react'
 import {
   adviceFor,
+  reclusterFromEdges,
   type CanonicalSection,
   type DuplicationCluster,
   type DuplicationEdge,
@@ -491,11 +492,34 @@ function DuplicationCard({
   onReanalyzeSemantic: () => void | Promise<void>
   rangeFor: (start: number, end: number) => string
 }) {
+  const [hideRelated, setHideRelated] = useState(false)
+
+  // When "hide related" is on, drop every edge the verifier labelled
+  // 'related' or 'unrelated' and re-cluster the survivors. Falls back
+  // to the original clusters if we have no verifier data (no labels
+  // means nothing to prune anyway).
+  const pruned = useMemo(() => {
+    if (!hideRelated) return null
+    if (Object.keys(edgeLabels).length === 0) return null
+    const keyOf = (e: DuplicationEdge) => e.from < e.to ? `${e.from}|${e.to}` : `${e.to}|${e.from}`
+    const kept = edges.filter(e => {
+      const lbl = edgeLabels[keyOf(e)]?.label
+      return lbl !== 'related' && lbl !== 'unrelated'
+    })
+    if (kept.length === edges.length) return null
+    return reclusterFromEdges(paragraphs, kept)
+  }, [hideRelated, edges, edgeLabels, paragraphs])
+  const displayClusters = pruned?.clusters ?? clusters
+  const displayEdges = pruned?.edges ?? edges
+
   const activeEdges = useMemo(() => {
-    const active = new Set(clusters.map(c => c.id))
-    return edges.filter(e => active.has(e.clusterId))
-  }, [clusters, edges])
-  const verdicts = useMemo(() => aggregateClusterLabels(clusters, activeEdges, edgeLabels), [clusters, activeEdges, edgeLabels])
+    const active = new Set(displayClusters.map(c => c.id))
+    return displayEdges.filter(e => active.has(e.clusterId))
+  }, [displayClusters, displayEdges])
+  const verdicts = useMemo(() => aggregateClusterLabels(displayClusters, activeEdges, edgeLabels), [displayClusters, activeEdges, edgeLabels])
+
+  const droppedCount = clusters.length - displayClusters.length
+
   const [expanded, setExpanded] = useState<Set<string>>(new Set())
   const toggle = (id: string) => setExpanded(prev => {
     const next = new Set(prev)
@@ -508,7 +532,12 @@ function DuplicationCard({
       <CardHeader className="pb-2">
         <CardTitle>
           Duplication
-          <Badge variant="secondary" className="ml-1">{clusters.length}</Badge>
+          <Badge variant="secondary" className="ml-1">
+            {displayClusters.length}
+            {droppedCount > 0 && (
+              <span className="ml-1 opacity-60">/{clusters.length}</span>
+            )}
+          </Badge>
           <Badge variant="outline" className="text-[10px]">
             {usingSemantic ? 'semantic' : 'trigram'}
           </Badge>
@@ -518,6 +547,17 @@ function DuplicationCard({
             </Badge>
           )}
           <div className="ml-auto flex items-center gap-1.5">
+            {usingSemantic && semantic.verified && !semantic.loading && (
+              <Button
+                variant={hideRelated ? 'default' : 'ghost'}
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                onClick={() => setHideRelated(v => !v)}
+                title="Drop edges the verifier labelled 'related' or 'unrelated' and re-cluster. Compare on/off to judge whether pruning helps for your prompt."
+              >
+                {hideRelated ? 'Showing pruned' : 'Hide related-only'}
+              </Button>
+            )}
             {usingSemantic && !semantic.loading && (
               <Button
                 variant="ghost"
@@ -554,15 +594,22 @@ function DuplicationCard({
             <Button variant="link" size="sm" className="h-auto p-0 text-xs" onClick={onActivateSemantic}>Re-run</Button>
           </div>
         )}
-        {clusters.length === 0 ? (
+        {hideRelated && droppedCount > 0 && (
+          <div className="flex items-center gap-2 rounded-md border border-sky-500/40 bg-sky-500/10 px-3 py-1.5 text-xs text-sky-700 dark:text-sky-300">
+            {droppedCount} cluster{droppedCount === 1 ? '' : 's'} hidden — every edge in {droppedCount === 1 ? 'it was' : 'them was'} labelled `related` or `unrelated` by the verifier. Toggle off to see them again.
+          </div>
+        )}
+        {displayClusters.length === 0 ? (
           <div className="py-3 text-sm text-muted-foreground">
             {usingSemantic
-              ? 'No paraphrase-level duplication above the semantic threshold.'
+              ? hideRelated
+                ? 'All clusters were verifier-labelled `related` or `unrelated` and are hidden. Toggle off to see them.'
+                : 'No paraphrase-level duplication above the semantic threshold.'
               : 'No near-duplicate paragraphs above the trigram threshold.'}
           </div>
         ) : (
           <ul className="divide-y divide-border">
-            {clusters.map(c => {
+            {displayClusters.map(c => {
               const open = expanded.has(c.id)
               const members = c.paragraphIds
                 .map(id => paragraphById.get(id))
