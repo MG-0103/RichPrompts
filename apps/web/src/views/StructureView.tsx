@@ -16,6 +16,7 @@ import type {
   SemanticState,
   VerifiedExtraction,
 } from '@/hooks/useSemanticDuplication'
+import type { SectionClassifierState } from '@/hooks/useSectionClassifier'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -30,6 +31,8 @@ interface Props {
   onToggleDismiss: (id: string) => void
   onClearDismissals: () => void
   onFixNoise?: (flag: NoiseFlag) => void
+  sectionClassifier?: SectionClassifierState
+  classifierAvailable?: boolean
   liveChars: number
   loading: boolean
   stale: boolean
@@ -106,6 +109,8 @@ export function StructureView({
   onToggleDismiss,
   onClearDismissals,
   onFixNoise,
+  sectionClassifier,
+  classifierAvailable,
   liveChars,
   loading,
   stale,
@@ -155,6 +160,12 @@ export function StructureView({
         onReanalyze={onReanalyze}
       />
       <BudgetCard budget={budget} chars={chars} approxTokens={approxTokens} />
+      {sectionClassifier && (
+        <SectionClassifierCard
+          state={sectionClassifier}
+          available={classifierAvailable ?? false}
+        />
+      )}
       <SectionsCard sections={sections} totalChars={chars} onJump={onJump} rangeFor={rangeFor} />
       {usingSemantic && semantic.verified && semantic.contradictions.length > 0 && (
         <ContradictionCard items={semantic.contradictions} onJump={onJump} rangeFor={rangeFor} />
@@ -762,6 +773,104 @@ function NoiseCard({
             </li>
           ))}
         </ul>
+      </CardContent>
+    </Card>
+  )
+}
+
+const CANONICAL_ORDER: CanonicalSection[] = ['role', 'task', 'output', 'constraints']
+
+function SectionClassifierCard({
+  state,
+  available,
+}: {
+  state: SectionClassifierState
+  available: boolean
+}) {
+  const { found, reasoning, loading, error, cached, run, clear } = state
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2">
+          <span>Section Classifier</span>
+          <Badge variant="secondary" className="text-[10px] uppercase">AI</Badge>
+          {cached && found && (
+            <Badge variant="outline" className="text-[10px]">cached</Badge>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-2 text-sm">
+        <p className="text-xs text-muted-foreground">
+          One LLM call over the whole doc — checks which of the four canonical
+          sections are conceptually present, even without labelled headings.
+          Overrides <span className="font-mono">missing-sections</span> for
+          the sections it finds.
+        </p>
+        {!available && (
+          <div className="flex items-center gap-2 text-xs text-amber-500">
+            <AlertCircle className="h-3.5 w-3.5" />
+            <span>Sidecar unreachable or OPENAI_API_KEY not set.</span>
+          </div>
+        )}
+        {error && (
+          <div className="flex items-center gap-2 text-xs text-destructive">
+            <AlertCircle className="h-3.5 w-3.5" />
+            <span>{error}</span>
+          </div>
+        )}
+        {found && (
+          <div className="space-y-1">
+            <div className="flex flex-wrap items-center gap-1.5">
+              {CANONICAL_ORDER.map(s => {
+                const present = found.includes(s)
+                return (
+                  <Badge
+                    key={s}
+                    variant={present ? 'default' : 'outline'}
+                    className={cn(
+                      'text-[10px] uppercase',
+                      !present && 'opacity-40',
+                    )}
+                  >
+                    {present ? <Check className="mr-0.5 h-2.5 w-2.5" /> : null}
+                    {s}
+                  </Badge>
+                )
+              })}
+            </div>
+            {reasoning && (
+              <p className="text-xs text-muted-foreground">{reasoning}</p>
+            )}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            variant="outline"
+            className="h-7 text-xs"
+            onClick={() => void run()}
+            disabled={loading || !available}
+          >
+            {loading ? (
+              <><Loader2 className="mr-1 h-3 w-3 animate-spin" /> Classifying…</>
+            ) : found ? (
+              <><Sparkles className="mr-1 h-3 w-3" /> Re-run</>
+            ) : (
+              <><Sparkles className="mr-1 h-3 w-3" /> Verify sections with AI</>
+            )}
+          </Button>
+          {found && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-7 text-xs"
+              onClick={clear}
+              disabled={loading}
+            >
+              Clear
+            </Button>
+          )}
+        </div>
       </CardContent>
     </Card>
   )

@@ -8,6 +8,7 @@ import {
   parseDocument,
   sampleRegistryTools,
   sampleRegistrySkills,
+  type CanonicalSection,
   type Diagnostic,
   type DocType,
   type NoiseFlag,
@@ -16,6 +17,7 @@ import {
 import { useLinter } from './hooks/useLinter'
 import { useStructure } from './hooks/useStructure'
 import { useSemanticDuplication } from './hooks/useSemanticDuplication'
+import { useSectionClassifier } from './hooks/useSectionClassifier'
 import { useLLMReview } from './hooks/useLLMReview'
 import { useRegistry } from './hooks/useRegistry'
 import { useTests } from './hooks/useTests'
@@ -93,7 +95,7 @@ function App() {
   const updateConfig = (cfg: RuleConfig) => { setConfigState(cfg); saveConfig(cfg) }
   const resetConfigToDefault = () => { resetConfig(); setConfigState(loadConfig()) }
   const source = sources[nav.docType]
-  const diagnostics = useLinter(source, nav.docType, config)
+  const rawDiagnostics = useLinter(source, nav.docType, config)
   const sections: Section[] = useMemo(
     () => (nav.docType === 'tool' ? [] : parseDocument(source, nav.docType).sections),
     [source, nav.docType],
@@ -125,6 +127,30 @@ function App() {
     () => `${nav.docType}:${hashContent(source)}`,
     [nav.docType, source],
   )
+  const sectionClassifier = useSectionClassifier(source, structureHash)
+
+  /**
+   * If the AI classifier has run and reports a section as present,
+   * strip that name from the `prompt/missing-sections` diagnostic (and
+   * drop the diagnostic entirely when the classifier accounts for
+   * every listed name). Every other diagnostic passes through as-is.
+   */
+  const diagnostics = useMemo(() => {
+    if (!sectionClassifier.found) return rawDiagnostics
+    const hinted = new Set<CanonicalSection>(sectionClassifier.found)
+    return rawDiagnostics.flatMap(d => {
+      if (d.ruleId !== 'prompt/missing-sections') return [d]
+      const m = d.message.match(/Missing recommended sections: ([^.]+)\./)
+      if (!m) return [d]
+      const listed = m[1].split(',').map(s => s.trim()) as CanonicalSection[]
+      const remaining = listed.filter(s => !hinted.has(s))
+      if (remaining.length === 0) return []
+      return [{
+        ...d,
+        message: `Missing recommended sections: ${remaining.join(', ')}. Add headings or <${remaining[0]}> tags.`,
+      }]
+    })
+  }, [rawDiagnostics, sectionClassifier.found])
   const tests = useTests()
   const llm = useLLMReview()
   const registry = useRegistry()
@@ -288,6 +314,8 @@ function App() {
             onToggleDismiss={onToggleDismiss}
             onClearDismissals={onClearDismissals}
             onFixNoise={onFixNoise}
+            sectionClassifier={sectionClassifier}
+            classifierAvailable={openaiReady}
             liveChars={source.length}
             loading={structure.loading}
             stale={structure.stale}

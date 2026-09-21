@@ -145,3 +145,19 @@ class VerifyExtractionResponse(BaseModel):
     cachedCount: int
     model: str
     durationMs: float
+
+
+CanonicalSectionLit = Literal["role", "task", "output", "constraints"]
+
+
+class ClassifySectionsRequest(BaseModel):
+    source: str
+    model: str | None = None
+
+
+class ClassifySectionsResponse(BaseModel):
+    found: list[CanonicalSectionLit]
+    reasoning: str
+    cached: bool
+    model: str
+    durationMs: float

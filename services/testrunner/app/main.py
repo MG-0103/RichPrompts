@@ -32,9 +32,19 @@ from .verify_extract import (
     is_available as verify_extract_available,
     verify_extractions,
 )
+from .classify import (
+    CACHE as CLASSIFY_CACHE,
+    DEFAULT_MODEL as DEFAULT_CLASSIFY_MODEL,
+    MAX_CHARS as CLASSIFY_MAX_CHARS,
+    ClassifyError,
+    classify_sections,
+    is_available as classify_available,
+)
 from .mock_runner import run_mock
 from .real_runner import is_available as real_available, run_real
 from .schemas import (
+    ClassifySectionsRequest,
+    ClassifySectionsResponse,
     EmbedRequest,
     EmbedResponse,
     ExtractionVerdict,
@@ -71,6 +81,7 @@ def health() -> dict:
     embed_ok, embed_reason = embed_available()
     verify_ok, verify_reason = verify_available()
     verify_extract_ok, verify_extract_reason = verify_extract_available()
+    classify_ok, classify_reason = classify_available()
     return {
         "ok": True,
         "version": SIDECAR_VERSION,
@@ -80,11 +91,13 @@ def health() -> dict:
         "openai": {"available": embed_ok, "reason": embed_reason},
         "verifier": {"available": verify_ok, "reason": verify_reason},
         "extractionVerifier": {"available": verify_extract_ok, "reason": verify_extract_reason},
+        "sectionClassifier": {"available": classify_ok, "reason": classify_reason},
         "cache": {
             "size": CACHE.size(),
             "embed": EMBED_CACHE.size(),
             "verify": VERIFY_CACHE.size(),
             "verifyExtract": VERIFY_EXTRACT_CACHE.size(),
+            "classify": CLASSIFY_CACHE.size(),
         },
     }
 
@@ -96,6 +109,7 @@ def clear_cache() -> dict:
         "embed_cleared": EMBED_CACHE.clear(),
         "verify_cleared": VERIFY_CACHE.clear(),
         "verify_extract_cleared": VERIFY_EXTRACT_CACHE.clear(),
+        "classify_cleared": CLASSIFY_CACHE.clear(),
     }
 
 
@@ -218,6 +232,42 @@ async def verify_extraction(req: VerifyExtractionRequest) -> VerifyExtractionRes
         verdicts=[ExtractionVerdict(**v) for v in raw],
         cachedCount=cached_count,
         model=req.model or DEFAULT_VERIFY_EXTRACT_MODEL,
+        durationMs=duration,
+    )
+
+
+@app.post("/classify-sections", response_model=ClassifySectionsResponse)
+async def classify_sections_endpoint(
+    req: ClassifySectionsRequest,
+) -> ClassifySectionsResponse:
+    if not req.source.strip():
+        return ClassifySectionsResponse(
+            found=[],
+            reasoning="",
+            cached=False,
+            model=req.model or DEFAULT_CLASSIFY_MODEL,
+            durationMs=0.0,
+        )
+    if len(req.source) > CLASSIFY_MAX_CHARS * 2:
+        raise HTTPException(
+            status_code=413,
+            detail=f"source exceeds {CLASSIFY_MAX_CHARS * 2} chars",
+        )
+    ready, reason = classify_available()
+    if not ready:
+        raise HTTPException(status_code=503, detail=f"section classifier unavailable: {reason}")
+
+    started = time.perf_counter()
+    try:
+        result, cached = await classify_sections(req.source, req.model)
+    except ClassifyError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    duration = (time.perf_counter() - started) * 1000
+    return ClassifySectionsResponse(
+        found=result["found"],
+        reasoning=result["reasoning"],
+        cached=cached,
+        model=req.model or DEFAULT_CLASSIFY_MODEL,
         durationMs=duration,
     )
 
