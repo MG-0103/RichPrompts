@@ -64,6 +64,8 @@ export {
   analyzeDuplication,
   clusterByPairwiseSimilarity,
   reclusterFromEdges,
+  longestCommonSubstring,
+  sharedPhrases,
   detectExtractionCandidates,
   adviceFor,
 } from './structure'

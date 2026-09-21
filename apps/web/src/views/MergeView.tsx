@@ -1,7 +1,10 @@
+import { useMemo } from 'react'
 import { AlertCircle, Check, Loader2, RefreshCw, Sparkles, X } from 'lucide-react'
+import { longestCommonSubstring, sharedPhrases } from '@richprompt/core'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { cn } from '@/lib/utils'
 import type { ActiveMerge } from '@/hooks/useClusterMerge'
 
 interface Props {
@@ -12,6 +15,112 @@ interface Props {
   onRegenerate: () => void
   onApply: () => void
   onCancel: () => void
+}
+
+const MIN_LCS_HIGHLIGHT = 15
+const MAX_LCS_STRINGS = 8
+
+/**
+ * Compute the set of substrings to highlight across cluster members.
+ * Combines:
+ *  - Pairwise longest common substrings ≥ MIN_LCS_HIGHLIGHT chars.
+ *  - Shared 3-5-word n-grams appearing in ≥ 2 members.
+ * Returned strings are deduplicated and, when one contains another,
+ * only the longer one is kept — the segmenter greedy-matches longest
+ * first so shorter contained variants would never fire anyway.
+ */
+function computeSharedStrings(texts: string[]): string[] {
+  if (texts.length < 2) return []
+  const raw = new Set<string>()
+
+  for (let i = 0; i < texts.length; i++) {
+    for (let j = i + 1; j < texts.length; j++) {
+      const lcs = longestCommonSubstring(texts[i], texts[j]).trim()
+      if (lcs.length >= MIN_LCS_HIGHLIGHT) raw.add(lcs)
+    }
+  }
+  for (const ng of sharedPhrases(texts)) {
+    if (ng.trim().length > 0) raw.add(ng.trim())
+  }
+
+  // Prune shorter strings that are wholly contained in a longer kept one.
+  const sorted = Array.from(raw).sort((a, b) => b.length - a.length)
+  const kept: string[] = []
+  for (const s of sorted) {
+    if (kept.some(k => k.toLowerCase().includes(s.toLowerCase()))) continue
+    kept.push(s)
+    if (kept.length >= MAX_LCS_STRINGS) break
+  }
+  return kept
+}
+
+interface Segment {
+  text: string
+  shared: boolean
+}
+
+/**
+ * Greedy non-overlapping segmentation: find every case-insensitive
+ * occurrence of any shared string, then walk left-to-right picking
+ * matches by (earliest start, then longest). Runs at most O(n · k)
+ * per member — cheap enough for a merge view with a handful of
+ * paragraphs.
+ */
+function segment(text: string, shared: string[]): Segment[] {
+  if (shared.length === 0 || text.length === 0) {
+    return [{ text, shared: false }]
+  }
+  const lower = text.toLowerCase()
+  const hits: { start: number; end: number }[] = []
+  for (const s of shared) {
+    const lo = s.toLowerCase()
+    let from = 0
+    while (from <= lower.length - lo.length) {
+      const idx = lower.indexOf(lo, from)
+      if (idx === -1) break
+      hits.push({ start: idx, end: idx + lo.length })
+      from = idx + Math.max(1, lo.length)
+    }
+  }
+  if (hits.length === 0) return [{ text, shared: false }]
+
+  hits.sort((a, b) => (a.start - b.start) || (b.end - b.start) - (a.end - a.start))
+  const accepted: { start: number; end: number }[] = []
+  let cursor = 0
+  for (const h of hits) {
+    if (h.start < cursor) continue
+    accepted.push(h)
+    cursor = h.end
+  }
+
+  const out: Segment[] = []
+  let pos = 0
+  for (const h of accepted) {
+    if (h.start > pos) out.push({ text: text.slice(pos, h.start), shared: false })
+    out.push({ text: text.slice(h.start, h.end), shared: true })
+    pos = h.end
+  }
+  if (pos < text.length) out.push({ text: text.slice(pos), shared: false })
+  return out
+}
+
+function DiffText({ text, shared }: { text: string; shared: string[] }) {
+  const segs = useMemo(() => segment(text, shared), [text, shared])
+  return (
+    <pre className="whitespace-pre-wrap font-mono leading-relaxed">
+      {segs.map((s, i) => (
+        <span
+          key={i}
+          className={cn(
+            s.shared &&
+              'rounded-sm bg-emerald-500/20 px-0.5 text-emerald-800 dark:bg-emerald-400/25 dark:text-emerald-100',
+          )}
+        >
+          {s.text}
+        </span>
+      ))}
+    </pre>
+  )
 }
 
 export function MergeView({
@@ -26,6 +135,10 @@ export function MergeView({
   const { members, proposed, edited, loading, error, cached } = active
   const totalMemberChars = members.reduce((a, m) => a + m.text.length, 0)
   const canApply = !loading && edited.trim().length > 0
+  const sharedStrings = useMemo(
+    () => computeSharedStrings(members.map(m => m.text)),
+    [members],
+  )
   return (
     <div className="mx-auto max-w-3xl space-y-4 p-4">
       <Card>
@@ -128,7 +241,15 @@ export function MergeView({
 
       <Card>
         <CardHeader className="pb-2">
-          <CardTitle className="text-sm">Original paragraphs</CardTitle>
+          <CardTitle className="flex items-center gap-2 text-sm">
+            <span>Original paragraphs</span>
+            {sharedStrings.length > 0 && (
+              <span className="ml-auto text-[10px] font-normal text-muted-foreground">
+                <span className="mr-1 inline-block h-2 w-2 rounded-sm bg-emerald-500/60 align-middle" />
+                shared across ≥ 2 members
+              </span>
+            )}
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <ul className="space-y-2">
@@ -146,9 +267,7 @@ export function MergeView({
                   <span className="font-mono">{m.text.length} chars</span>
                   <span className="font-mono">@{m.startOffset}</span>
                 </div>
-                <pre className="whitespace-pre-wrap font-mono leading-relaxed">
-                  {m.text}
-                </pre>
+                <DiffText text={m.text} shared={sharedStrings} />
               </li>
             ))}
           </ul>
