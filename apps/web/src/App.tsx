@@ -18,7 +18,7 @@ import { useLLMReview } from './hooks/useLLMReview'
 import { useRegistry } from './hooks/useRegistry'
 import { useTests } from './hooks/useTests'
 import { useVersioning } from './hooks/useVersioning'
-import { loadConfig } from './persistence/config'
+import { loadConfig, resetConfig, saveConfig } from './persistence/config'
 import { loadTestingConfig, saveTestingConfig } from './persistence/testConfig'
 import { clearDismissals, loadDismissals, toggleDismissal } from './persistence/dismissals'
 import { addPin, loadPins, removePin, type RegistryPin } from './persistence/pins'
@@ -36,6 +36,7 @@ import { TestsView } from './views/TestsView'
 import { HistoryView } from './views/HistoryView'
 import { LLMReviewView } from './views/LLMReviewView'
 import { RegistryView } from './views/RegistryView'
+import { SettingsView } from './views/SettingsView'
 
 const FIXTURES: Record<DocType, string> = {
   prompt: badPrompt,
@@ -52,7 +53,9 @@ const DOC_LABEL: Record<DocType, string> = {
 function App() {
   const nav = useNavigation()
   const [sources, setSources] = useState<Record<DocType, string>>(FIXTURES)
-  const [config] = useState<RuleConfig>(() => loadConfig())
+  const [config, setConfigState] = useState<RuleConfig>(() => loadConfig())
+  const updateConfig = (cfg: RuleConfig) => { setConfigState(cfg); saveConfig(cfg) }
+  const resetConfigToDefault = () => { resetConfig(); setConfigState(loadConfig()) }
   const source = sources[nav.docType]
   const diagnostics = useLinter(source, nav.docType, config)
   const sections: Section[] = useMemo(
@@ -299,7 +302,13 @@ function App() {
       case 'registry':
         return <RegistryView findings={registry.findings} onRescan={registry.rescan} />
       case 'settings':
-        return <Placeholder title="Settings" note="Settings migration lands in N9." />
+        return (
+          <SettingsView
+            config={config}
+            onChange={updateConfig}
+            onReset={resetConfigToDefault}
+          />
+        )
     }
   })()
 
