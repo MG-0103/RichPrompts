@@ -8,6 +8,7 @@ import {
   detectNoise,
   applyNoiseFix,
   isNoiseFixable,
+  reclusterFromEdges,
   estimateTokens,
   longestCommonSubstring,
   sharedPhrases,
@@ -342,5 +343,39 @@ describe('analyzeStructure', () => {
     // Budget is populated
     expect(r.budget.model).toBe('claude-sonnet-5')
     expect(r.budget.approxTokens).toBe(estimateTokens(raw.length))
+  })
+})
+
+describe('reclusterFromEdges', () => {
+  const ps = [
+    { id: 'p1', text: 'a'.repeat(60), startOffset: 0, endOffset: 60, section: 'role' as const, heading: null },
+    { id: 'p2', text: 'b'.repeat(60), startOffset: 60, endOffset: 120, section: 'task' as const, heading: null },
+    { id: 'p3', text: 'c'.repeat(60), startOffset: 120, endOffset: 180, section: 'task' as const, heading: null },
+    { id: 'p4', text: 'd'.repeat(60), startOffset: 180, endOffset: 240, section: 'output' as const, heading: null },
+  ]
+
+  it('rebuilds clusters from a filtered edge subset', () => {
+    // Keep only p1-p2 as duplicates; drop p3-p4 as related-not-duplicate.
+    const kept = [{ from: 'p1', to: 'p2', similarity: 0.85, clusterId: 'x' }]
+    const out = reclusterFromEdges(ps, kept)
+    expect(out.clusters).toHaveLength(1)
+    expect(out.clusters[0].paragraphIds.sort()).toEqual(['p1', 'p2'])
+    expect(out.edges).toHaveLength(1)
+    expect(out.edges[0].clusterId).toBe(out.clusters[0].id)
+  })
+
+  it('splits a chain when the middle edge is dropped', () => {
+    // Original chain: p1—p2—p3. If we drop p2—p3, the chain splits.
+    // With only p1—p2 kept, {p1,p2} is a cluster and p3 drops out.
+    const kept = [{ from: 'p1', to: 'p2', similarity: 0.8, clusterId: 'x' }]
+    const out = reclusterFromEdges(ps, kept)
+    expect(out.clusters).toHaveLength(1)
+    expect(out.clusters[0].paragraphIds.sort()).toEqual(['p1', 'p2'])
+  })
+
+  it('returns nothing when every edge is dropped', () => {
+    const out = reclusterFromEdges(ps, [])
+    expect(out.clusters).toEqual([])
+    expect(out.edges).toEqual([])
   })
 })

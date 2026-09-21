@@ -419,6 +419,112 @@ export function clusterByPairwiseSimilarity(
 }
 
 /**
+ * Rebuild clusters from a subset of edges (e.g. after a reranker has
+ * pruned obviously-related-not-duplicate pairs). Runs union-find over
+ * the given edges, then computes cluster metadata (mean similarity,
+ * LCS, shared n-grams, preview, crossSection) exactly as the trigram
+ * and semantic paths do. Paragraphs not connected by any kept edge
+ * drop out; singleton components are omitted.
+ */
+export function reclusterFromEdges(
+  paragraphs: Paragraph[],
+  edges: DuplicationEdge[],
+): DuplicationAnalysis {
+  if (edges.length === 0) return { clusters: [], edges: [] }
+
+  // Union-find over the paragraphs referenced by any edge.
+  const parent = new Map<string, string>()
+  const seed = (id: string) => { if (!parent.has(id)) parent.set(id, id) }
+  for (const e of edges) { seed(e.from); seed(e.to) }
+  const find = (x: string): string => {
+    let r = x
+    while (parent.get(r) !== r) r = parent.get(r)!
+    let cur = x
+    while (parent.get(cur) !== r) {
+      const next = parent.get(cur)!
+      parent.set(cur, r)
+      cur = next
+    }
+    return r
+  }
+  const union = (a: string, b: string) => {
+    const ra = find(a), rb = find(b)
+    if (ra !== rb) parent.set(ra, rb)
+  }
+
+  const pairKey = (a: string, b: string) => a < b ? `${a}|${b}` : `${b}|${a}`
+  const pairSims = new Map<string, number>()
+  for (const e of edges) {
+    pairSims.set(pairKey(e.from, e.to), e.similarity)
+    union(e.from, e.to)
+  }
+
+  const groups = new Map<string, string[]>()
+  for (const id of parent.keys()) {
+    const root = find(id)
+    let list = groups.get(root)
+    if (!list) { list = []; groups.set(root, list) }
+    list.push(id)
+  }
+
+  const byId = new Map(paragraphs.map(p => [p.id, p]))
+  const out: DuplicationCluster[] = []
+  let clusterId = 0
+  for (const ids of groups.values()) {
+    if (ids.length < 2) continue
+    let sum = 0, count = 0
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const s = pairSims.get(pairKey(ids[i], ids[j]))
+        if (s !== undefined) { sum += s; count++ }
+      }
+    }
+    const similarity = count > 0 ? sum / count : 0
+    const members = ids.map(id => byId.get(id)!).filter(Boolean)
+    if (members.length < 2) continue
+    const totalChars = members.reduce((a, p) => a + p.text.length, 0)
+    const sections = new Set(members.map(p => p.section ?? 'other'))
+    const crossSection = sections.size > 1
+    const shortest = members.reduce((a, p) => p.text.length < a.text.length ? p : a, members[0])
+    const previewSource = shortest.text.replace(/\s+/g, ' ').trim()
+    const preview = previewSource.slice(0, 80) + (previewSource.length > 80 ? '…' : '')
+
+    const [topA, topB] = topPair(ids, pairSims)
+    const lcsRaw = topA && topB
+      ? longestCommonSubstring(byId.get(topA)!.text, byId.get(topB)!.text)
+      : ''
+    const sharedText = lcsRaw.length >= SHARED_MIN_LCS ? lcsRaw : ''
+    const sharedNgrams = sharedPhrases(members.map(p => p.text))
+
+    out.push({
+      id: `dup-${clusterId++}`,
+      paragraphIds: ids,
+      similarity,
+      totalChars,
+      crossSection,
+      preview,
+      sharedText,
+      sharedNgrams,
+    })
+  }
+
+  out.sort((a, b) => (b.totalChars * b.similarity) - (a.totalChars * a.similarity))
+
+  const clusterByRoot = new Map<string, string>()
+  for (const c of out) {
+    const root = find(c.paragraphIds[0])
+    clusterByRoot.set(root, c.id)
+  }
+  const rebuiltEdges: DuplicationEdge[] = []
+  for (const e of edges) {
+    const cid = clusterByRoot.get(find(e.from))
+    if (!cid) continue
+    rebuiltEdges.push({ from: e.from, to: e.to, similarity: e.similarity, clusterId: cid })
+  }
+  return { clusters: out, edges: rebuiltEdges }
+}
+
+/**
  * Templated advice for a cluster, based on its shape.
  */
 export function adviceFor(cluster: DuplicationCluster, paragraphs: Paragraph[]): string {

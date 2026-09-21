@@ -3,6 +3,7 @@ import {
   clusterByPairwiseSimilarity,
   cosineSimilarity,
   detectExtractionCandidates,
+  reclusterFromEdges,
   type DuplicationAnalysis,
   type DuplicationEdge,
   type ExtractionCandidate,
@@ -253,6 +254,23 @@ export function useSemanticDuplication(
           verifyFetched = v.fetchedCount
           verifyMs = v.durationMs
           didVerify = true
+
+          // Reranker-style pruning: drop edges the verifier says are
+          // `related` or `unrelated` (bi-encoder said close, verifier
+          // says not the same rule). Unverified edges (past MAX_VERIFY_
+          // PAIRS) stay — no basis to reject them. Union-find is re-run
+          // over survivors, so clusters can shrink, split, or vanish.
+          const kept = result.edges.filter(e => {
+            const label = finalLabels[edgeKey(e)]?.label
+            return label !== 'related' && label !== 'unrelated'
+          })
+          if (kept.length !== result.edges.length) {
+            const pruned = reclusterFromEdges(paragraphs, kept)
+            // Rewrite result so downstream storage / UI see pruned form.
+            result.clusters = pruned.clusters
+            result.edges = pruned.edges
+            setAnalysis(pruned)
+          }
         } catch (e) {
           if ((e as Error).name !== 'AbortError') {
             setError(`Verifier failed: ${(e as Error).message}. Showing unverified semantic clusters.`)

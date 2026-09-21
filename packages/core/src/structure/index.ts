@@ -15,6 +15,7 @@ export {
   detectDuplicationClusters,
   analyzeDuplication,
   clusterByPairwiseSimilarity,
+  reclusterFromEdges,
   adviceFor,
   longestCommonSubstring,
   sharedPhrases,

@@ -63,6 +63,7 @@ export {
   detectDuplicationClusters,
   analyzeDuplication,
   clusterByPairwiseSimilarity,
+  reclusterFromEdges,
   detectExtractionCandidates,
   adviceFor,
 } from './structure'
