@@ -75,7 +75,25 @@ export function useClusterMerge(): ClusterMergeState {
           section: p.section,
           heading: p.heading,
         }))
-      if (members.length < 2) return
+      if (members.length < 2) {
+        const missing = cluster.paragraphIds.length - members.length
+        setActive({
+          clusterId: cluster.id,
+          members: [],
+          proposed: '',
+          reason: '',
+          cached: false,
+          loading: false,
+          error:
+            `Cluster references ${cluster.paragraphIds.length} paragraph` +
+            `${cluster.paragraphIds.length === 1 ? '' : 's'}, but only ` +
+            `${members.length} exist in the current document ` +
+            `(${missing} missing). The Deep Analyze cache is out of sync — ` +
+            `hit Re-analyze in the Structure view to rebuild.`,
+          edited: '',
+        })
+        return
+      }
 
       const cacheKey = keyOf(members.map(m => m.text))
       const hit = cacheRef.current.get(cacheKey)

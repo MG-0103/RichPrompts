@@ -55,8 +55,8 @@ const HistoryView = lazy(() =>
 const LLMReviewView = lazy(() =>
   import('./views/LLMReviewView').then(m => ({ default: m.LLMReviewView })),
 )
-const MergeView = lazy(() =>
-  import('./views/MergeView').then(m => ({ default: m.MergeView })),
+const MergeWorkbench = lazy(() =>
+  import('./views/MergeWorkbench').then(m => ({ default: m.MergeWorkbench })),
 )
 const TestsView = lazy(() =>
   import('./views/TestsView').then(m => ({ default: m.TestsView })),
@@ -143,15 +143,13 @@ function App() {
   }, [source])
 
   const onOpenMerge = useCallback((cluster: import('@richprompt/core').DuplicationCluster) => {
-    const paragraphs = structureReport?.paragraphs
-    if (!paragraphs) return
+    const paragraphs = structureReport?.paragraphs ?? []
     void clusterMerge.open(cluster, paragraphs)
-    nav.changeRightPane('merge')
-  }, [clusterMerge, nav, structureReport?.paragraphs])
+  }, [clusterMerge, structureReport?.paragraphs])
 
   const onApplyMerge = useCallback(() => {
     const m = clusterMerge.active
-    if (!m || !m.edited.trim()) return
+    if (!m || !m.edited.trim() || m.members.length < 2) return
     // Sort members by startOffset descending so earlier offsets stay
     // valid as we splice from the tail. First member (lowest offset)
     // gets replaced with the merged text; the rest are removed.
@@ -172,23 +170,11 @@ function App() {
       return { ...s, [nav.docType]: next }
     })
     clusterMerge.close()
-    nav.changeRightPane('structure')
-  }, [clusterMerge, nav])
+  }, [clusterMerge, nav.docType])
 
   const onCancelMerge = useCallback(() => {
     clusterMerge.close()
-    nav.changeRightPane('structure')
-  }, [clusterMerge, nav])
-
-  const mergeHighlights = useMemo(() => {
-    const a = clusterMerge.active
-    if (!a) return undefined
-    return a.members.map((m, i) => ({
-      startOffset: m.startOffset,
-      endOffset: m.endOffset,
-      index: i + 1,
-    }))
-  }, [clusterMerge.active])
+  }, [clusterMerge])
 
   /**
    * If the AI classifier has run and reports a section as present,
@@ -349,9 +335,19 @@ function App() {
     requestAnimationFrame(() => { syncingRef.current = null })
   }
 
-  const crumbs: Crumb[] = nav.active.scope === 'workspace'
-    ? [{ label: 'Workspace' }, { label: workspaceLabel(nav.active.view) }]
-    : [{ label: DOC_LABEL[nav.docType] }, { label: rightPaneLabel(nav.rightPane) }]
+  const crumbs: Crumb[] = (() => {
+    if (nav.active.scope === 'workspace') {
+      return [{ label: 'Workspace' }, { label: workspaceLabel(nav.active.view) }]
+    }
+    if (clusterMerge.active) {
+      return [
+        { label: DOC_LABEL[nav.docType], onSelect: onCancelMerge },
+        { label: 'Structure', onSelect: onCancelMerge },
+        { label: 'Merge cluster' },
+      ]
+    }
+    return [{ label: DOC_LABEL[nav.docType] }, { label: rightPaneLabel(nav.rightPane) }]
+  })()
 
   const rightContentInner = (() => {
     switch (nav.rightPane) {
@@ -420,25 +416,22 @@ function App() {
             onReview={() => llm.review(nav.docType, source, diagnostics)}
           />
         )
-      case 'merge':
-        if (!clusterMerge.active) return <Placeholder title="Merge" note="No cluster selected." />
-        return (
-          <MergeView
-            active={clusterMerge.active}
-            available={openaiReady}
-            reason={openaiReason}
-            onEdit={clusterMerge.setEdited}
-            onRegenerate={() => void clusterMerge.regenerate()}
-            onApply={onApplyMerge}
-            onCancel={onCancelMerge}
-          />
-        )
     }
   })()
 
   const rightContent = <Suspense fallback={<ViewFallback />}>{rightContentInner}</Suspense>
 
-  const workbench = (
+  const workbench = clusterMerge.active ? (
+    <MergeWorkbench
+      active={clusterMerge.active}
+      available={openaiReady}
+      reason={openaiReason}
+      onEdit={clusterMerge.setEdited}
+      onRegenerate={() => void clusterMerge.regenerate()}
+      onApply={onApplyMerge}
+      onCancel={onCancelMerge}
+    />
+  ) : (
     <WorkbenchBundle
       source={source}
       docType={nav.docType}
@@ -454,8 +447,6 @@ function App() {
       badges={{
         structure: structureReport?.duplicationClusters.length,
       }}
-      highlightRanges={mergeHighlights}
-      extraViews={clusterMerge.active ? [{ key: 'merge', label: 'Merge' }] : undefined}
     />
   )
 
@@ -524,8 +515,8 @@ function App() {
         onOpenWorkbench={nav.openWorkbench}
         onOpenWorkspace={nav.openWorkspace}
         crumbs={crumbs}
-        canGoBack={nav.canGoBack}
-        onBack={nav.back}
+        canGoBack={clusterMerge.active ? true : nav.canGoBack}
+        onBack={clusterMerge.active ? onCancelMerge : nav.back}
         diagnostics={diagnostics}
         sections={sections}
         onJumpDiagnostic={jumpToDiagnostic}

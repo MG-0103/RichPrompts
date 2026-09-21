@@ -9,16 +9,9 @@ interface Props {
   rightContent: ReactNode
   /** Optional counts badged next to each tab. */
   badges?: Partial<Record<RightPaneView, number>>
-  /** Contextual tabs that only appear when a flow needs them (e.g.
-   *  `merge` while a cluster-merge is in progress). Rendered before
-   *  the standard tab set. */
-  extraViews?: { key: RightPaneView; label: string }[]
 }
 
-export function Workbench({ editor, rightPane, onRightPaneChange, rightContent, badges, extraViews }: Props) {
-  const visibleViews = extraViews && extraViews.length > 0
-    ? [...extraViews, ...RIGHT_PANE_VIEWS]
-    : RIGHT_PANE_VIEWS
+export function Workbench({ editor, rightPane, onRightPaneChange, rightContent, badges }: Props) {
   const [ratio, setRatio] = useState<number>(() => {
     try {
       const v = parseFloat(localStorage.getItem('richprompt.wb.split') ?? '')
@@ -72,7 +65,7 @@ export function Workbench({ editor, rightPane, onRightPaneChange, rightContent, 
       />
       <div className="flex min-h-0 min-w-0 flex-col border-l border-border">
         <div className="flex h-9 shrink-0 items-center gap-1 border-b border-border px-2">
-          {visibleViews.map(v => {
+          {RIGHT_PANE_VIEWS.map(v => {
             const count = badges?.[v.key]
             return (
               <button

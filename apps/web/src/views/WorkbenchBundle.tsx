@@ -22,7 +22,6 @@ interface Props {
   rightContent: ReactNode
   badges?: Partial<Record<RightPaneView, number>>
   highlightRanges?: HighlightRange[]
-  extraViews?: { key: RightPaneView; label: string }[]
 }
 
 export function WorkbenchBundle({
@@ -39,7 +38,6 @@ export function WorkbenchBundle({
   rightContent,
   badges,
   highlightRanges,
-  extraViews,
 }: Props) {
   return (
     <Workbench
@@ -60,7 +58,6 @@ export function WorkbenchBundle({
       onRightPaneChange={onRightPaneChange}
       rightContent={rightContent}
       badges={badges}
-      extraViews={extraViews}
     />
   )
 }
