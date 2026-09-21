@@ -20,6 +20,39 @@ export function classifyCanonical(name: string): CanonicalSection | undefined {
   return undefined
 }
 
+/** Strong opening-line patterns that identify a paragraph's canonical
+ *  role even without an explicit heading. Deliberately strict — each
+ *  pattern requires a distinctive introductory phrase or a labelled
+ *  list, so incidental prose doesn't false-positive. */
+const BODY_PATTERNS: Array<{ canonical: CanonicalSection; re: RegExp }> = [
+  {
+    canonical: 'role',
+    re: /(?:^|\n)\s*(?:you\s+are\b|you'?re\s+(?:a|an|the)\b|act\s+as\b|your\s+persona\b|identity\s*[:.-])/i,
+  },
+  {
+    canonical: 'task',
+    re: /(?:^|\n)\s*(?:your\s+(?:task|job|goal|objective|primary\s+function|responsibility)\s+is\b|the\s+task\s+is\b|task\s*[:.-]|objective\s*[:.-]|goal\s*[:.-])/i,
+  },
+  {
+    canonical: 'output',
+    re: /(?:^|\n)\s*(?:output\s+format|response\s+format|return\s+(?:a|an|the)?\s*(?:json|xml|list|structured|markdown)|format\s*[:.-]|schema\s*[:.-])/i,
+  },
+  {
+    canonical: 'constraints',
+    re: /(?:^|\n)\s*(?:constraints?|rules?|requirements?|guidelines?|policies?|limitations?|restrictions?)\s*[:.\-]/i,
+  },
+]
+
+/** Scan raw text for strong canonical-signalling opening lines. Used
+ *  as a fallback when no heading of that canonical is present. */
+export function inferBodyCanonicals(raw: string): Set<CanonicalSection> {
+  const out = new Set<CanonicalSection>()
+  for (const { canonical, re } of BODY_PATTERNS) {
+    if (re.test(raw)) out.add(canonical)
+  }
+  return out
+}
+
 export function parseDocument(raw: string, docType: DocType = 'prompt'): ParsedDoc {
   const sections: Section[] = []
   let cursor = 0

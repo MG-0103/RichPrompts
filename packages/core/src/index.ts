@@ -1,6 +1,6 @@
 export * from './types'
 export { defaultConfig } from './config'
-export { parseDocument, classifyCanonical } from './parser'
+export { parseDocument, classifyCanonical, inferBodyCanonicals } from './parser'
 export { parseToolDocument } from './toolParser'
 export type { ParsedTool, ToolParam } from './toolParser'
 export { runRules } from './engine'

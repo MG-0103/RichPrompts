@@ -1,6 +1,7 @@
-import type { Diagnostic, ParsedDoc, Rule } from '../types'
+import type { CanonicalSection, Diagnostic, ParsedDoc, Rule } from '../types'
+import { classifyCanonical, inferBodyCanonicals } from '../parser'
 
-const REQUIRED_SECTIONS = ['role', 'task', 'output', 'constraints']
+const REQUIRED_SECTIONS: CanonicalSection[] = ['role', 'task', 'output', 'constraints']
 
 const missingSections: Rule = {
   id: 'prompt/missing-sections',
@@ -9,14 +10,19 @@ const missingSections: Rule = {
   appliesTo: ['prompt'],
   docsRef: 'docs/06-anti-patterns.md § 1 (Vague prompts)',
   check(doc) {
-    const names = new Set(
-      doc.sections
-        .filter(s => s.kind === 'heading' || s.kind === 'xml')
-        .map(s => s.name.toLowerCase())
-    )
-    const missing = REQUIRED_SECTIONS.filter(
-      req => ![...names].some(n => n.includes(req))
-    )
+    // Consider a canonical section "present" if EITHER a heading/xml tag
+    // classifies as it (synonyms like "Rules" → constraints included),
+    // OR the body has a strong opening-line signal (e.g. "You are…",
+    // "Your task is…", "Rules:").
+    const found = new Set<CanonicalSection>()
+    for (const s of doc.sections) {
+      if (s.kind !== 'heading' && s.kind !== 'xml') continue
+      const c = s.canonical ?? classifyCanonical(s.name)
+      if (c) found.add(c)
+    }
+    for (const c of inferBodyCanonicals(doc.raw)) found.add(c)
+
+    const missing = REQUIRED_SECTIONS.filter(req => !found.has(req))
     if (missing.length === 0) return []
     return [
       {
