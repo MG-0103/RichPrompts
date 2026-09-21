@@ -166,3 +166,16 @@ class ClassifySectionsResponse(BaseModel):
     # note.
     truncatedFrom: int = 0
 
+
+class MergeClusterRequest(BaseModel):
+    members: list[str]
+    model: str | None = None
+
+
+class MergeClusterResponse(BaseModel):
+    merged: str
+    reason: str
+    cached: bool
+    model: str
+    durationMs: float
+

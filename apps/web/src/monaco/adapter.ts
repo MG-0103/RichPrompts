@@ -54,6 +54,36 @@ export function sectionsToDecorations(
   return out
 }
 
+export interface HighlightRange {
+  startOffset: number
+  endOffset: number
+  /** 1-based index of this range within a set — surfaces in the gutter
+   *  as `[1]`, `[2]`, … so cluster members stay identifiable when
+   *  they're scattered across the doc. */
+  index?: number
+}
+
+/** Highlight arbitrary offset ranges — used for cluster-merge preview
+ *  where we want to make every member of the cluster visible at once
+ *  in the editor. */
+export function highlightsToDecorations(
+  model: editor.ITextModel,
+  ranges: HighlightRange[],
+): editor.IModelDeltaDecoration[] {
+  return ranges.map(r => ({
+    range: offsetToRange(model, r.startOffset, r.endOffset),
+    options: {
+      isWholeLine: true,
+      className: 'merge-highlight',
+      linesDecorationsClassName: 'merge-highlight-bar',
+      overviewRuler: {
+        color: '#f97316',
+        position: 4,
+      },
+    },
+  }))
+}
+
 export function diagnosticsToMarkers(
   mon: MonacoNS,
   model: editor.ITextModel,

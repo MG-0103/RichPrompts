@@ -6,6 +6,7 @@ import type { Diagnostic, DocType, Section } from '@richprompt/core'
 import { EditorPane, type EditorController } from './EditorPane'
 import { Workbench } from './Workbench'
 import type { RightPaneView } from '@/shell/views'
+import type { HighlightRange } from '@/monaco/adapter'
 
 interface Props {
   source: string
@@ -20,6 +21,8 @@ interface Props {
   onRightPaneChange: (v: RightPaneView) => void
   rightContent: ReactNode
   badges?: Partial<Record<RightPaneView, number>>
+  highlightRanges?: HighlightRange[]
+  extraViews?: { key: RightPaneView; label: string }[]
 }
 
 export function WorkbenchBundle({
@@ -35,6 +38,8 @@ export function WorkbenchBundle({
   onRightPaneChange,
   rightContent,
   badges,
+  highlightRanges,
+  extraViews,
 }: Props) {
   return (
     <Workbench
@@ -48,12 +53,14 @@ export function WorkbenchBundle({
           sections={sections}
           onChange={onChange}
           theme={theme}
+          highlightRanges={highlightRanges}
         />
       }
       rightPane={rightPane}
       onRightPaneChange={onRightPaneChange}
       rightContent={rightContent}
       badges={badges}
+      extraViews={extraViews}
     />
   )
 }

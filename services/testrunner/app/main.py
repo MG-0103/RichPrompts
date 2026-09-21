@@ -40,11 +40,22 @@ from .classify import (
     classify_sections,
     is_available as classify_available,
 )
+from .merge import (
+    CACHE as MERGE_CACHE,
+    DEFAULT_MODEL as DEFAULT_MERGE_MODEL,
+    MAX_MEMBERS as MERGE_MAX_MEMBERS,
+    MAX_CHARS_PER_MEMBER as MERGE_MAX_CHARS,
+    MergeError,
+    merge_cluster,
+    is_available as merge_available,
+)
 from .mock_runner import run_mock
 from .real_runner import is_available as real_available, run_real
 from .schemas import (
     ClassifySectionsRequest,
     ClassifySectionsResponse,
+    MergeClusterRequest,
+    MergeClusterResponse,
     EmbedRequest,
     EmbedResponse,
     ExtractionVerdict,
@@ -82,6 +93,7 @@ def health() -> dict:
     verify_ok, verify_reason = verify_available()
     verify_extract_ok, verify_extract_reason = verify_extract_available()
     classify_ok, classify_reason = classify_available()
+    merge_ok, merge_reason = merge_available()
     return {
         "ok": True,
         "version": SIDECAR_VERSION,
@@ -92,12 +104,14 @@ def health() -> dict:
         "verifier": {"available": verify_ok, "reason": verify_reason},
         "extractionVerifier": {"available": verify_extract_ok, "reason": verify_extract_reason},
         "sectionClassifier": {"available": classify_ok, "reason": classify_reason},
+        "clusterMerger": {"available": merge_ok, "reason": merge_reason},
         "cache": {
             "size": CACHE.size(),
             "embed": EMBED_CACHE.size(),
             "verify": VERIFY_CACHE.size(),
             "verifyExtract": VERIFY_EXTRACT_CACHE.size(),
             "classify": CLASSIFY_CACHE.size(),
+            "merge": MERGE_CACHE.size(),
         },
     }
 
@@ -110,6 +124,7 @@ def clear_cache() -> dict:
         "verify_cleared": VERIFY_CACHE.clear(),
         "verify_extract_cleared": VERIFY_EXTRACT_CACHE.clear(),
         "classify_cleared": CLASSIFY_CACHE.clear(),
+        "merge_cleared": MERGE_CACHE.clear(),
     }
 
 
@@ -273,6 +288,40 @@ async def classify_sections_endpoint(
         model=req.model or DEFAULT_CLASSIFY_MODEL,
         durationMs=duration,
         truncatedFrom=int(result.get("truncatedFrom", 0)),
+    )
+
+
+@app.post("/merge-cluster", response_model=MergeClusterResponse)
+async def merge_cluster_endpoint(req: MergeClusterRequest) -> MergeClusterResponse:
+    if len(req.members) < 2:
+        raise HTTPException(status_code=400, detail="need at least 2 members to merge")
+    if len(req.members) > MERGE_MAX_MEMBERS:
+        raise HTTPException(
+            status_code=413,
+            detail=f"too many members: {len(req.members)} > {MERGE_MAX_MEMBERS}",
+        )
+    for i, m in enumerate(req.members):
+        if len(m) > MERGE_MAX_CHARS * 2:
+            raise HTTPException(
+                status_code=413,
+                detail=f"members[{i}] exceeds {MERGE_MAX_CHARS * 2}",
+            )
+    ready, reason = merge_available()
+    if not ready:
+        raise HTTPException(status_code=503, detail=f"merger unavailable: {reason}")
+
+    started = time.perf_counter()
+    try:
+        result, cached = await merge_cluster(req.members, req.model)
+    except MergeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    duration = (time.perf_counter() - started) * 1000
+    return MergeClusterResponse(
+        merged=result["merged"],
+        reason=result["reason"],
+        cached=cached,
+        model=req.model or DEFAULT_MERGE_MODEL,
+        durationMs=duration,
     )
 
 

@@ -92,6 +92,18 @@ body {
 .canonical-output      { background: #9a6ad9; }
 .canonical-constraints { background: #d69a3a; }
 
+/* Cluster-merge preview highlight — Monaco decorations painted on the
+   editor while the Merge view is open. */
+.merge-highlight {
+  background-color: color-mix(in oklab, #f97316 18%, transparent);
+}
+.merge-highlight-bar {
+  width: 3px !important;
+  margin-left: 3px;
+  border-radius: 2px;
+  background: #f97316;
+}
+
 /* Preview diagnostic-hover highlight. PreviewPane toggles this class on
    the innermost element whose source-offset range overlaps the hovered
    diagnostic's range. */

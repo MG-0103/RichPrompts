@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   applyDiagnosticFix,
   applyNoiseFix,
@@ -19,6 +19,7 @@ import { useLinter } from './hooks/useLinter'
 import { useStructure } from './hooks/useStructure'
 import { useSemanticDuplication } from './hooks/useSemanticDuplication'
 import { useSectionClassifier } from './hooks/useSectionClassifier'
+import { useClusterMerge } from './hooks/useClusterMerge'
 import { useLLMReview } from './hooks/useLLMReview'
 import { useRegistry } from './hooks/useRegistry'
 import { useTests } from './hooks/useTests'
@@ -53,6 +54,9 @@ const HistoryView = lazy(() =>
 )
 const LLMReviewView = lazy(() =>
   import('./views/LLMReviewView').then(m => ({ default: m.LLMReviewView })),
+)
+const MergeView = lazy(() =>
+  import('./views/MergeView').then(m => ({ default: m.MergeView })),
 )
 const TestsView = lazy(() =>
   import('./views/TestsView').then(m => ({ default: m.TestsView })),
@@ -129,6 +133,62 @@ function App() {
     [nav.docType, source],
   )
   const sectionClassifier = useSectionClassifier(source, structureHash)
+  const clusterMerge = useClusterMerge()
+
+  // On source change, close any open merge — the offsets it captured
+  // may no longer be valid.
+  useEffect(() => {
+    if (clusterMerge.active) clusterMerge.close()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source])
+
+  const onOpenMerge = useCallback((cluster: import('@richprompt/core').DuplicationCluster) => {
+    const paragraphs = structureReport?.paragraphs
+    if (!paragraphs) return
+    void clusterMerge.open(cluster, paragraphs)
+    nav.changeRightPane('merge')
+  }, [clusterMerge, nav, structureReport?.paragraphs])
+
+  const onApplyMerge = useCallback(() => {
+    const m = clusterMerge.active
+    if (!m || !m.edited.trim()) return
+    // Sort members by startOffset descending so earlier offsets stay
+    // valid as we splice from the tail. First member (lowest offset)
+    // gets replaced with the merged text; the rest are removed.
+    const sorted = [...m.members].sort((a, b) => a.startOffset - b.startOffset)
+    const first = sorted[0]
+    setSources(s => {
+      let next = s[nav.docType]
+      // Iterate back-to-front, deleting each non-first member's range
+      // (plus one trailing newline to avoid leaving blank paragraphs).
+      for (let i = sorted.length - 1; i >= 1; i--) {
+        const mem = sorted[i]
+        let cut = mem.endOffset
+        if (next[cut] === '\n') cut += 1
+        next = next.slice(0, mem.startOffset) + next.slice(cut)
+      }
+      // Replace the first member's range with the merged text.
+      next = next.slice(0, first.startOffset) + m.edited.trim() + next.slice(first.endOffset)
+      return { ...s, [nav.docType]: next }
+    })
+    clusterMerge.close()
+    nav.changeRightPane('structure')
+  }, [clusterMerge, nav])
+
+  const onCancelMerge = useCallback(() => {
+    clusterMerge.close()
+    nav.changeRightPane('structure')
+  }, [clusterMerge, nav])
+
+  const mergeHighlights = useMemo(() => {
+    const a = clusterMerge.active
+    if (!a) return undefined
+    return a.members.map((m, i) => ({
+      startOffset: m.startOffset,
+      endOffset: m.endOffset,
+      index: i + 1,
+    }))
+  }, [clusterMerge.active])
 
   /**
    * If the AI classifier has run and reports a section as present,
@@ -330,6 +390,9 @@ function App() {
             onActivateSemantic={semantic.activate}
             onDeactivateSemantic={semantic.deactivate}
             onReanalyzeSemantic={semantic.reanalyze}
+            onMergeCluster={onOpenMerge}
+            mergerAvailable={openaiReady}
+            activeMergeClusterId={clusterMerge.active?.clusterId ?? null}
             openaiReady={openaiReady}
             openaiReason={openaiReason}
           />
@@ -357,6 +420,19 @@ function App() {
             onReview={() => llm.review(nav.docType, source, diagnostics)}
           />
         )
+      case 'merge':
+        if (!clusterMerge.active) return <Placeholder title="Merge" note="No cluster selected." />
+        return (
+          <MergeView
+            active={clusterMerge.active}
+            available={openaiReady}
+            reason={openaiReason}
+            onEdit={clusterMerge.setEdited}
+            onRegenerate={() => void clusterMerge.regenerate()}
+            onApply={onApplyMerge}
+            onCancel={onCancelMerge}
+          />
+        )
     }
   })()
 
@@ -378,6 +454,8 @@ function App() {
       badges={{
         structure: structureReport?.duplicationClusters.length,
       }}
+      highlightRanges={mergeHighlights}
+      extraViews={clusterMerge.active ? [{ key: 'merge', label: 'Merge' }] : undefined}
     />
   )
 

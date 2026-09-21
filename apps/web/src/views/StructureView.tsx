@@ -32,6 +32,9 @@ interface Props {
   onToggleDismiss: (id: string) => void
   onClearDismissals: () => void
   onFixNoise?: (flag: NoiseFlag) => void
+  onMergeCluster?: (cluster: DuplicationCluster) => void
+  mergerAvailable?: boolean
+  activeMergeClusterId?: string | null
   sectionClassifier?: SectionClassifierState
   classifierAvailable?: boolean
   liveChars: number
@@ -111,6 +114,9 @@ export function StructureView({
   onToggleDismiss,
   onClearDismissals,
   onFixNoise,
+  onMergeCluster,
+  mergerAvailable,
+  activeMergeClusterId,
   sectionClassifier,
   classifierAvailable,
   liveChars,
@@ -184,6 +190,9 @@ export function StructureView({
         paragraphs={paragraphs}
         onJump={onJump}
         onDismiss={onToggleDismiss}
+        onMergeCluster={onMergeCluster}
+        mergerAvailable={mergerAvailable}
+        activeMergeClusterId={activeMergeClusterId}
         semantic={semantic}
         usingSemantic={usingSemantic}
         openaiReady={openaiReady}
@@ -479,6 +488,7 @@ const VERDICT_STYLE: Record<'duplicate' | 'contradictory' | 'related' | 'unrelat
 
 function DuplicationCard({
   clusters, edges, edgeLabels, paragraphById, paragraphs, onJump, onDismiss,
+  onMergeCluster, mergerAvailable, activeMergeClusterId,
   semantic, usingSemantic, openaiReady, openaiReason, onActivateSemantic, onDeactivateSemantic,
   onReanalyzeSemantic, rangeFor,
 }: {
@@ -486,6 +496,9 @@ function DuplicationCard({
   edgeLabels: SemanticState['edgeLabels']
   paragraphById: Map<string, Paragraph>; paragraphs: Paragraph[]
   onJump: (offset: number) => void; onDismiss: (id: string) => void
+  onMergeCluster?: (c: DuplicationCluster) => void
+  mergerAvailable?: boolean
+  activeMergeClusterId?: string | null
   semantic: SemanticState; usingSemantic: boolean
   openaiReady: boolean; openaiReason: string | null
   onActivateSemantic: () => void | Promise<void>; onDeactivateSemantic: () => void
@@ -644,6 +657,20 @@ function DuplicationCard({
                       onClick={e => e.stopPropagation()}
                     >
                       <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={() => onJump(members[0].startOffset)}>jump</Button>
+                      {onMergeCluster && (
+                        <Button
+                          variant={activeMergeClusterId === c.id ? 'default' : 'outline'}
+                          size="sm"
+                          className="h-6 px-2 text-[10px]"
+                          onClick={() => onMergeCluster(c)}
+                          disabled={!mergerAvailable}
+                          title={mergerAvailable
+                            ? 'Ask the LLM to merge these into one paragraph'
+                            : 'Sidecar unreachable or OPENAI_API_KEY not set'}
+                        >
+                          {activeMergeClusterId === c.id ? 'Merging…' : 'Merge…'}
+                        </Button>
+                      )}
                       <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={() => onDismiss(c.id)} title="Hide this cluster for the current doc version">dismiss</Button>
                     </span>
                   </button>

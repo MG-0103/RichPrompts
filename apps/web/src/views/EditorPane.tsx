@@ -5,9 +5,11 @@ import type { Diagnostic, DocType, Section } from '@richprompt/core'
 import { cn } from '@/lib/utils'
 import {
   diagnosticsToMarkers,
+  highlightsToDecorations,
   MARKER_OWNER,
   offsetToRange,
   sectionsToDecorations,
+  type HighlightRange,
 } from '@/monaco/adapter'
 import { installProviders } from '@/monaco/providers'
 
@@ -36,10 +38,14 @@ interface Props {
   theme: 'light' | 'dark'
   /** Extra items rendered to the right of the doc-type switcher in the toolbar. */
   toolbarExtras?: React.ReactNode
+  /** Contextual highlight ranges — used to mark cluster members while
+   *  the Merge view is open. Painted on top of the canonical-section
+   *  bars, never replaces them. */
+  highlightRanges?: HighlightRange[]
 }
 
 export const EditorPane = forwardRef<EditorController, Props>(function EditorPane(
-  { source, docType, onDocTypeChange, diagnostics, sections, onChange, theme, toolbarExtras },
+  { source, docType, onDocTypeChange, diagnostics, sections, onChange, theme, toolbarExtras, highlightRanges },
   ref,
 ) {
   const language = LANGUAGE_FOR[docType]
@@ -48,6 +54,7 @@ export const EditorPane = forwardRef<EditorController, Props>(function EditorPan
   const storeRef = useRef<{ current: Diagnostic[] }>({ current: [] })
   const providerCleanupRef = useRef<Map<string, () => void>>(new Map())
   const decoIdsRef = useRef<string[]>([])
+  const highlightIdsRef = useRef<string[]>([])
   storeRef.current.current = diagnostics
 
   useEffect(() => {
@@ -66,6 +73,25 @@ export const EditorPane = forwardRef<EditorController, Props>(function EditorPan
     const next = sectionsToDecorations(model, sections)
     decoIdsRef.current = ed.deltaDecorations(decoIdsRef.current, next)
   }, [sections])
+
+  useEffect(() => {
+    const ed = editorRef.current
+    const model = ed?.getModel()
+    if (!ed || !model) return
+    const next = highlightRanges
+      ? highlightsToDecorations(model, highlightRanges)
+      : []
+    highlightIdsRef.current = ed.deltaDecorations(highlightIdsRef.current, next)
+    // On first highlight, scroll the earliest range into view.
+    if (highlightRanges && highlightRanges.length > 0) {
+      const first = highlightRanges.reduce(
+        (a, b) => (b.startOffset < a.startOffset ? b : a),
+        highlightRanges[0],
+      )
+      const pos = model.getPositionAt(first.startOffset)
+      ed.revealLineInCenter(pos.lineNumber)
+    }
+  }, [highlightRanges])
 
   useEffect(() => {
     const mon = monacoRef.current
