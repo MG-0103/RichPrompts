@@ -15,6 +15,7 @@ import { useLinter } from './hooks/useLinter'
 import { useStructure } from './hooks/useStructure'
 import { useSemanticDuplication } from './hooks/useSemanticDuplication'
 import { useLLMReview } from './hooks/useLLMReview'
+import { useRegistry } from './hooks/useRegistry'
 import { useTests } from './hooks/useTests'
 import { useVersioning } from './hooks/useVersioning'
 import { loadConfig } from './persistence/config'
@@ -34,6 +35,7 @@ import { StructureView } from './views/StructureView'
 import { TestsView } from './views/TestsView'
 import { HistoryView } from './views/HistoryView'
 import { LLMReviewView } from './views/LLMReviewView'
+import { RegistryView } from './views/RegistryView'
 
 const FIXTURES: Record<DocType, string> = {
   prompt: badPrompt,
@@ -128,6 +130,7 @@ function App() {
   )
   const tests = useTests()
   const llm = useLLMReview()
+  const registry = useRegistry()
   const verifierReady =
     tests.sidecar.state === 'up' ? Boolean(tests.sidecar.verifier?.available) : false
   const openaiReady =
@@ -294,7 +297,7 @@ function App() {
           />
         )
       case 'registry':
-        return <Placeholder title="Registry" note="Registry migration lands in N8." />
+        return <RegistryView findings={registry.findings} onRescan={registry.rescan} />
       case 'settings':
         return <Placeholder title="Settings" note="Settings migration lands in N9." />
     }
