@@ -91,3 +91,13 @@ body {
 .canonical-task        { background: #5ab671; }
 .canonical-output      { background: #9a6ad9; }
 .canonical-constraints { background: #d69a3a; }
+
+/* Preview diagnostic-hover highlight. PreviewPane toggles this class on
+   the innermost element whose source-offset range overlaps the hovered
+   diagnostic's range. */
+.diag-hover-highlight {
+  background-color: color-mix(in oklab, var(--foreground) 12%, transparent);
+  border-radius: 3px;
+  box-shadow: 0 0 0 2px color-mix(in oklab, var(--foreground) 18%, transparent);
+  transition: background-color 120ms ease, box-shadow 120ms ease;
+}

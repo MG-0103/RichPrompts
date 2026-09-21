@@ -21,6 +21,9 @@ interface Props {
   diagnostics: Diagnostic[]
   sections: Section[]
   onJump?: (d: Diagnostic) => void
+  /** Fires when the user hovers or leaves a diagnostic row. Used by the
+   *  Preview pane to highlight the span in the rendered output. */
+  onHoverDiagnostic?: (d: Diagnostic | null) => void
 }
 
 type GroupMode = 'severity' | 'rule' | 'section'
@@ -38,7 +41,7 @@ const SEV_META: Record<
 const SEVERITY_ORDER: Severity[] = ['error', 'warn', 'info']
 const SECTION_ORDER: SectionBucket[] = ['role', 'task', 'output', 'constraints', 'other']
 
-export function ProblemsStrip({ diagnostics, sections, onJump }: Props) {
+export function ProblemsStrip({ diagnostics, sections, onJump, onHoverDiagnostic }: Props) {
   const [expanded, setExpanded] = useState(false)
   const [mode, setMode] = useState<GroupMode>('severity')
   const [muted, setMuted] = useState<Set<Severity>>(new Set())
@@ -214,6 +217,8 @@ export function ProblemsStrip({ diagnostics, sections, onJump }: Props) {
                             <li
                               key={`${group.key}-${i}`}
                               className="flex items-start gap-2 px-3 py-1 pl-8 text-xs hover:bg-accent/30"
+                              onMouseEnter={() => onHoverDiagnostic?.(d)}
+                              onMouseLeave={() => onHoverDiagnostic?.(null)}
                             >
                               <Icon className={cn('mt-0.5 h-3.5 w-3.5 shrink-0', SEV_META[d.severity].className)} />
                               <div className="min-w-0 flex-1">

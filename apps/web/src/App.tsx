@@ -99,6 +99,10 @@ function App() {
   const editorRef = useRef<EditorController | null>(null)
   const previewScrollRef = useRef<HTMLDivElement | null>(null)
   const syncingRef = useRef<'editor' | 'preview' | null>(null)
+  const [hoveredDiag, setHoveredDiag] = useState<Diagnostic | null>(null)
+  const hoverRange = hoveredDiag
+    ? { start: hoveredDiag.range.startOffset, end: hoveredDiag.range.endOffset }
+    : null
 
   // Structure + semantic duplication
   const [runnerConfig, setRunnerConfig] = useState(() => loadTestingConfig())
@@ -263,6 +267,7 @@ function App() {
             source={source}
             docType={nav.docType}
             onScroll={onPreviewScroll}
+            hoverRange={hoverRange}
           />
         )
       case 'structure':
@@ -407,6 +412,7 @@ function App() {
         diagnostics={diagnostics}
         sections={sections}
         onJumpDiagnostic={jumpToDiagnostic}
+        onHoverDiagnostic={setHoveredDiag}
         theme={theme}
         onToggleTheme={toggleTheme}
       >

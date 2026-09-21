@@ -16,6 +16,7 @@ interface Props {
   diagnostics: Diagnostic[]
   sections: Section[]
   onJumpDiagnostic?: (d: Diagnostic) => void
+  onHoverDiagnostic?: (d: Diagnostic | null) => void
   theme: Theme
   onToggleTheme: () => void
   children: ReactNode
@@ -31,6 +32,7 @@ export function AppShell({
   diagnostics,
   sections,
   onJumpDiagnostic,
+  onHoverDiagnostic,
   theme,
   onToggleTheme,
   children,
@@ -50,6 +52,7 @@ export function AppShell({
         diagnostics={diagnostics}
         sections={sections}
         onJump={onJumpDiagnostic}
+        onHoverDiagnostic={onHoverDiagnostic}
       />
     </div>
   )

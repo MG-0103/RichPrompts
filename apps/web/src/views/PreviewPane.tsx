@@ -1,4 +1,4 @@
-import { forwardRef, useMemo } from 'react'
+import { forwardRef, useEffect, useMemo, useRef } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
@@ -62,10 +62,40 @@ const MD_COMPONENTS = {
   h4: (p: { children?: React.ReactNode }) => renderHeading('h4', p),
 }
 
+/**
+ * Rehype plugin: walk the hast tree and stamp each element with the
+ * source-offset range that produced it (from remark's `position` info).
+ * Runs AFTER `rehype-sanitize` so its default schema doesn't strip the
+ * `data-*` attributes. Positions come from mdast-to-hast conversion and
+ * survive through the pipeline as long as we don't strip them ourselves.
+ */
+type HastNode = {
+  type: string
+  properties?: Record<string, unknown>
+  position?: { start?: { offset?: number }; end?: { offset?: number } }
+  children?: HastNode[]
+}
+function rehypeOffsets() {
+  return (tree: HastNode) => {
+    const walk = (n: HastNode) => {
+      if (n.type === 'element' && n.position?.start?.offset != null && n.position?.end?.offset != null) {
+        n.properties = n.properties ?? {}
+        n.properties['data-off-start'] = String(n.position.start.offset)
+        n.properties['data-off-end'] = String(n.position.end.offset)
+      }
+      if (n.children) for (const c of n.children) walk(c)
+    }
+    walk(tree)
+  }
+}
+
 type Props = {
   source: string
   docType: DocType
   onScroll?: (e: React.UIEvent<HTMLDivElement>) => void
+  /** Range in `source` to highlight in the rendered preview (from Problems
+   *  strip hover). Null clears the highlight. */
+  hoverRange?: { start: number; end: number } | null
 }
 
 type ToolShape = {
@@ -139,12 +169,64 @@ function ToolPreview({ source }: { source: string }) {
 }
 
 export const PreviewPane = forwardRef<HTMLDivElement, Props>(function PreviewPane(
-  { source, docType, onScroll },
+  { source, docType, onScroll, hoverRange },
   scrollRef,
 ) {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+
+  // Merge the forwarded ref with our internal one — App owns the ref for
+  // scroll sync; we need the same node to query data-off elements.
+  const setRefs = (el: HTMLDivElement | null) => {
+    containerRef.current = el
+    if (typeof scrollRef === 'function') scrollRef(el)
+    else if (scrollRef) (scrollRef as { current: HTMLDivElement | null }).current = el
+  }
+
+  // Toggle highlight class on elements whose source-offset range overlaps
+  // the hovered diagnostic. Runs on hoverRange change; O(n) in element
+  // count but only fires on hover, so it's cheap.
+  useEffect(() => {
+    const root = containerRef.current
+    if (!root) return
+    root.querySelectorAll('.diag-hover-highlight').forEach(el =>
+      el.classList.remove('diag-hover-highlight'),
+    )
+    if (!hoverRange) return
+    const { start, end } = hoverRange
+    const nodes = root.querySelectorAll<HTMLElement>('[data-off-start][data-off-end]')
+    // Pick the smallest element whose range fully contains the hover span,
+    // or the smallest element that overlaps it if no full-containment.
+    let bestContainer: HTMLElement | null = null
+    let bestContainerSize = Infinity
+    let bestOverlap: HTMLElement | null = null
+    let bestOverlapSize = Infinity
+    for (const el of nodes) {
+      const s = Number(el.dataset.offStart)
+      const e = Number(el.dataset.offEnd)
+      if (Number.isNaN(s) || Number.isNaN(e)) continue
+      const size = e - s
+      if (s <= start && e >= end) {
+        if (size < bestContainerSize) {
+          bestContainerSize = size
+          bestContainer = el
+        }
+      } else if (s < end && e > start) {
+        if (size < bestOverlapSize) {
+          bestOverlapSize = size
+          bestOverlap = el
+        }
+      }
+    }
+    const target = bestContainer ?? bestOverlap
+    if (target) {
+      target.classList.add('diag-hover-highlight')
+      target.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+    }
+  }, [hoverRange])
+
   return (
     <div
-      ref={scrollRef}
+      ref={setRefs}
       onScroll={onScroll}
       className="h-full min-h-0 overflow-auto"
     >
@@ -157,6 +239,7 @@ export const PreviewPane = forwardRef<HTMLDivElement, Props>(function PreviewPan
             rehypePlugins={[
               rehypeSanitize,
               [rehypeHighlight, { detect: true, languages: HIGHLIGHT_LANGS }],
+              rehypeOffsets,
             ]}
             components={MD_COMPONENTS}
           >
