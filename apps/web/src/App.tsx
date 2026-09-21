@@ -14,6 +14,7 @@ import {
 import { useLinter } from './hooks/useLinter'
 import { useStructure } from './hooks/useStructure'
 import { useSemanticDuplication } from './hooks/useSemanticDuplication'
+import { useLLMReview } from './hooks/useLLMReview'
 import { useTests } from './hooks/useTests'
 import { useVersioning } from './hooks/useVersioning'
 import { loadConfig } from './persistence/config'
@@ -32,6 +33,7 @@ import { EditorView, type EditorController } from './views/EditorView'
 import { StructureView } from './views/StructureView'
 import { TestsView } from './views/TestsView'
 import { HistoryView } from './views/HistoryView'
+import { LLMReviewView } from './views/LLMReviewView'
 
 const FIXTURES: Record<DocType, string> = {
   prompt: badPrompt,
@@ -125,6 +127,7 @@ function App() {
     [nav.docType, source],
   )
   const tests = useTests()
+  const llm = useLLMReview()
   const verifierReady =
     tests.sidecar.state === 'up' ? Boolean(tests.sidecar.verifier?.available) : false
   const openaiReady =
@@ -237,7 +240,16 @@ function App() {
             />
           )
         case 'review':
-          return <Placeholder title="LLM Review" note="LLM Review migration lands in N7." />
+          return (
+            <LLMReviewView
+              apiKey={llm.apiKey}
+              setApiKey={llm.setApiKey}
+              loading={llm.loading}
+              output={llm.output}
+              error={llm.error}
+              onReview={() => llm.review(nav.docType, source, diagnostics)}
+            />
+          )
       }
     }
     switch (nav.active.view) {
