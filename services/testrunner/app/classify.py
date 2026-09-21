@@ -25,7 +25,10 @@ import httpx
 
 DEFAULT_MODEL = "gpt-4o-mini"
 OPENAI_URL = "https://api.openai.com/v1/chat/completions"
-MAX_CHARS = 12000
+# gpt-4o-mini has a 128k context window; 32k chars ≈ 8k tokens keeps the
+# call cheap and fast while covering nearly every prompt users actually
+# write. Anything longer is truncated on the server before the call.
+MAX_CHARS = 32000
 REQUEST_TIMEOUT_S = 30.0
 
 CanonicalSection = str  # "role" | "task" | "output" | "constraints"
@@ -111,10 +114,14 @@ async def classify_sections(
 
     model_name = model or DEFAULT_MODEL
     text = source[:MAX_CHARS]
+    truncated_from = len(source) if len(source) > MAX_CHARS else 0
     key = _cache_key(text, model_name)
     hit = CACHE.get(key)
     if hit is not None:
-        return hit, True
+        # Preserve the current call's truncation info in the hit — the
+        # cached body was computed from the same text, but the caller
+        # needs to know their present source was clipped.
+        return {**hit, "truncatedFrom": truncated_from}, True
 
     api_key = os.environ["OPENAI_API_KEY"]
     async with httpx.AsyncClient() as client:
@@ -155,4 +162,4 @@ async def classify_sections(
     reasoning = str(parsed.get("reasoning", ""))[:400]
     result = {"found": found, "reasoning": reasoning}
     CACHE.put(key, result)
-    return cast(dict, result), False
+    return cast(dict, {**result, "truncatedFrom": truncated_from}), False

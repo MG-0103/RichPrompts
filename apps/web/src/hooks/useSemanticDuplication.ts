@@ -74,6 +74,10 @@ export interface SemanticState {
   /** Verifier cache stats from the last pass. */
   lastVerifyCached: number
   lastVerifyFetched: number
+  /** True when the current `analysis` was rehydrated from localStorage
+   *  (no fresh embed/verify network call in this activation). Flips
+   *  false as soon as a live `run()` completes. */
+  fromCache: boolean
 }
 
 /**
@@ -121,6 +125,7 @@ export function useSemanticDuplication(
   const [verified, setVerified] = useState(false)
   const [lastVerifyCached, setLastVerifyCached] = useState(0)
   const [lastVerifyFetched, setLastVerifyFetched] = useState(0)
+  const [fromCache, setFromCache] = useState(false)
   const [history, setHistory] = useState<SemanticCacheEntry[]>(() => listSemanticCache())
   const abortRef = useRef<AbortController | null>(null)
 
@@ -137,6 +142,7 @@ export function useSemanticDuplication(
     setLastFetchedCount(entry.lastFetchedCount)
     setLastVerifyCached(entry.lastVerifyCached)
     setLastVerifyFetched(entry.lastVerifyFetched)
+    setFromCache(true)
     setError(null)
   }, [])
 
@@ -170,6 +176,7 @@ export function useSemanticDuplication(
     }
 
     setLoading(true)
+    setFromCache(false)
     try {
       // ---------- Embeddings ----------
       setPhase('embedding')
@@ -410,6 +417,7 @@ export function useSemanticDuplication(
     verified,
     lastVerifyCached,
     lastVerifyFetched,
+    fromCache,
     activate,
     deactivate,
     reanalyze,

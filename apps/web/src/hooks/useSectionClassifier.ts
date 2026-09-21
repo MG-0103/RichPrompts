@@ -19,6 +19,7 @@ interface CacheEntry {
   found: CanonicalSection[]
   reasoning: string
   timestamp: number
+  truncatedFrom?: number
 }
 
 function readCache(): CacheEntry[] {
@@ -60,6 +61,10 @@ export interface SectionClassifierState {
   error: string | null
   /** True when the found set was loaded from cache, not just now. */
   cached: boolean
+  /** > 0 when the last result was computed on a truncated prefix of the
+   *  source. Carries the original char count so the UI can say
+   *  "classified first 32k of {truncatedFrom} chars". */
+  truncatedFrom: number
   run: () => Promise<void>
   clear: () => void
 }
@@ -71,6 +76,7 @@ export function useSectionClassifier(
   const [found, setFound] = useState<CanonicalSection[] | null>(null)
   const [reasoning, setReasoning] = useState('')
   const [cached, setCached] = useState(false)
+  const [truncatedFrom, setTruncatedFrom] = useState(0)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -80,11 +86,13 @@ export function useSectionClassifier(
     if (hit) {
       setFound(hit.found)
       setReasoning(hit.reasoning)
+      setTruncatedFrom(hit.truncatedFrom ?? 0)
       setCached(true)
       setError(null)
     } else {
       setFound(null)
       setReasoning('')
+      setTruncatedFrom(0)
       setCached(false)
     }
   }, [contentHash])
@@ -96,11 +104,13 @@ export function useSectionClassifier(
       const res = await classifySections(source)
       setFound(res.found)
       setReasoning(res.reasoning)
+      setTruncatedFrom(res.truncatedFrom)
       setCached(false)
       upsert({
         hash: contentHash,
         found: res.found,
         reasoning: res.reasoning,
+        truncatedFrom: res.truncatedFrom,
         timestamp: Date.now(),
       })
     } catch (e) {
@@ -113,11 +123,12 @@ export function useSectionClassifier(
   const clear = useCallback(() => {
     setFound(null)
     setReasoning('')
+    setTruncatedFrom(0)
     setCached(false)
     setError(null)
     const kept = readCache().filter(e => e.hash !== contentHash)
     writeCache(kept)
   }, [contentHash])
 
-  return { found, reasoning, loading, error, cached, run, clear }
+  return { found, reasoning, loading, error, cached, truncatedFrom, run, clear }
 }

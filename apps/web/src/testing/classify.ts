@@ -21,6 +21,10 @@ export interface ClassifyResult {
   cached: boolean
   durationMs: number
   model: string
+  /** 0 when the source fit within the server's MAX_CHARS. Otherwise
+   *  the original char count, so the caller can tell the user it was
+   *  clipped. */
+  truncatedFrom: number
 }
 
 interface ServerResponse {
@@ -29,6 +33,7 @@ interface ServerResponse {
   cached: boolean
   model: string
   durationMs: number
+  truncatedFrom?: number
 }
 
 export async function classifySections(
@@ -55,5 +60,6 @@ export async function classifySections(
     cached: data.cached,
     durationMs: data.durationMs,
     model: data.model,
+    truncatedFrom: data.truncatedFrom ?? 0,
   }
 }

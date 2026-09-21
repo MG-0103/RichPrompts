@@ -329,6 +329,7 @@ function App() {
             semantic={semantic}
             onActivateSemantic={semantic.activate}
             onDeactivateSemantic={semantic.deactivate}
+            onReanalyzeSemantic={semantic.reanalyze}
             openaiReady={openaiReady}
             openaiReason={openaiReason}
           />

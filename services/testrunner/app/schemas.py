@@ -161,3 +161,8 @@ class ClassifySectionsResponse(BaseModel):
     cached: bool
     model: str
     durationMs: float
+    # 0 when the source fit within MAX_CHARS. Otherwise the original
+    # source length in chars, so the UI can show a "clipped to first N"
+    # note.
+    truncatedFrom: int = 0
+

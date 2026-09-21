@@ -42,6 +42,7 @@ interface Props {
   semantic: SemanticState
   onActivateSemantic: () => void | Promise<void>
   onDeactivateSemantic: () => void
+  onReanalyzeSemantic: () => void | Promise<void>
   openaiReady: boolean
   openaiReason: string | null
 }
@@ -120,6 +121,7 @@ export function StructureView({
   semantic,
   onActivateSemantic,
   onDeactivateSemantic,
+  onReanalyzeSemantic,
   openaiReady,
   openaiReason,
 }: Props) {
@@ -187,6 +189,7 @@ export function StructureView({
         openaiReason={openaiReason}
         onActivateSemantic={onActivateSemantic}
         onDeactivateSemantic={onDeactivateSemantic}
+        onReanalyzeSemantic={onReanalyzeSemantic}
         rangeFor={rangeFor}
       />
       <NoiseCard flags={activeNoise} onJump={onJump} onDismiss={onToggleDismiss} onFix={onFixNoise} rangeFor={rangeFor} />
@@ -476,7 +479,7 @@ const VERDICT_STYLE: Record<'duplicate' | 'contradictory' | 'related' | 'unrelat
 function DuplicationCard({
   clusters, edges, edgeLabels, paragraphById, paragraphs, onJump, onDismiss,
   semantic, usingSemantic, openaiReady, openaiReason, onActivateSemantic, onDeactivateSemantic,
-  rangeFor,
+  onReanalyzeSemantic, rangeFor,
 }: {
   clusters: DuplicationCluster[]; edges: DuplicationEdge[]
   edgeLabels: SemanticState['edgeLabels']
@@ -485,6 +488,7 @@ function DuplicationCard({
   semantic: SemanticState; usingSemantic: boolean
   openaiReady: boolean; openaiReason: string | null
   onActivateSemantic: () => void | Promise<void>; onDeactivateSemantic: () => void
+  onReanalyzeSemantic: () => void | Promise<void>
   rangeFor: (start: number, end: number) => string
 }) {
   const activeEdges = useMemo(() => {
@@ -513,7 +517,24 @@ function DuplicationCard({
               verifier-pruned
             </Badge>
           )}
-          <div className="ml-auto">
+          {usingSemantic && semantic.fromCache && !semantic.loading && (
+            <Badge variant="outline" className="text-[10px]" title="Rehydrated from localStorage — no fresh embed/verify call this session.">
+              cached
+            </Badge>
+          )}
+          <div className="ml-auto flex items-center gap-1.5">
+            {usingSemantic && !semantic.loading && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-7 gap-1 text-xs"
+                onClick={() => void onReanalyzeSemantic()}
+                title="Force a fresh embed + verify pass (bypasses the cache)."
+              >
+                <RefreshCw className="h-3 w-3" />
+                Re-analyze
+              </Button>
+            )}
             <DeepAnalyzeButton
               semantic={semantic}
               usingSemantic={usingSemantic}
@@ -792,7 +813,7 @@ function SectionClassifierCard({
   state: SectionClassifierState
   available: boolean
 }) {
-  const { found, reasoning, loading, error, cached, run, clear } = state
+  const { found, reasoning, loading, error, cached, truncatedFrom, run, clear } = state
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -821,6 +842,15 @@ function SectionClassifierCard({
           <div className="flex items-center gap-2 text-xs text-destructive">
             <AlertCircle className="h-3.5 w-3.5" />
             <span>{error}</span>
+          </div>
+        )}
+        {found && truncatedFrom > 0 && (
+          <div className="flex items-center gap-2 text-xs text-amber-500">
+            <AlertCircle className="h-3.5 w-3.5" />
+            <span>
+              Classified from the first 32,000 of {truncatedFrom.toLocaleString()} chars.
+              Sections after that were not seen.
+            </span>
           </div>
         )}
         {found && (

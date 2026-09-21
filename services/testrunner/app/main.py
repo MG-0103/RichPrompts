@@ -248,10 +248,13 @@ async def classify_sections_endpoint(
             model=req.model or DEFAULT_CLASSIFY_MODEL,
             durationMs=0.0,
         )
-    if len(req.source) > CLASSIFY_MAX_CHARS * 2:
+    # No hard reject on size — the classifier truncates internally to
+    # MAX_CHARS (32k) and the LLM easily handles the rest. Reject only
+    # payloads that would obviously waste bandwidth (1 MB+).
+    if len(req.source) > 1_000_000:
         raise HTTPException(
             status_code=413,
-            detail=f"source exceeds {CLASSIFY_MAX_CHARS * 2} chars",
+            detail=f"source exceeds 1,000,000 chars — split the document first",
         )
     ready, reason = classify_available()
     if not ready:
@@ -269,6 +272,7 @@ async def classify_sections_endpoint(
         cached=cached,
         model=req.model or DEFAULT_CLASSIFY_MODEL,
         durationMs=duration,
+        truncatedFrom=int(result.get("truncatedFrom", 0)),
     )
 
 
