@@ -16,8 +16,9 @@ import { useStructure } from './hooks/useStructure'
 import { useSemanticDuplication } from './hooks/useSemanticDuplication'
 import { useTests } from './hooks/useTests'
 import { loadConfig } from './persistence/config'
-import { loadTestingConfig } from './persistence/testConfig'
+import { loadTestingConfig, saveTestingConfig } from './persistence/testConfig'
 import { clearDismissals, loadDismissals, toggleDismissal } from './persistence/dismissals'
+import { addPin, loadPins, removePin, type RegistryPin } from './persistence/pins'
 import { callTargets } from './testing/registry'
 import type { RuleConfig } from '@richprompt/core'
 import { TooltipProvider } from './components/ui/tooltip'
@@ -28,6 +29,7 @@ import type { Crumb } from './shell/Breadcrumbs'
 import { Placeholder } from './views/Placeholder'
 import { EditorView, type EditorController } from './views/EditorView'
 import { StructureView } from './views/StructureView'
+import { TestsView } from './views/TestsView'
 
 const FIXTURES: Record<DocType, string> = {
   prompt: badPrompt,
@@ -54,7 +56,47 @@ function App() {
   const editorRef = useRef<EditorController | null>(null)
 
   // Structure + semantic duplication (only meaningful for prompt/skill)
-  const [runnerConfig] = useState(() => loadTestingConfig())
+  const [runnerConfig, setRunnerConfig] = useState(() => loadTestingConfig())
+  const updateRunnerConfig = (c: typeof runnerConfig) => {
+    setRunnerConfig(c)
+    saveTestingConfig(c)
+  }
+  const [useMock, setUseMock] = useState<boolean>(() => {
+    try { return localStorage.getItem('richprompt.tests.mock') !== '0' } catch { return true }
+  })
+  const toggleMock = (v: boolean) => {
+    setUseMock(v)
+    try { localStorage.setItem('richprompt.tests.mock', v ? '1' : '0') } catch { /* ignore */ }
+  }
+  const targets = useMemo(
+    () => callTargets(sampleRegistryTools, sampleRegistrySkills),
+    [],
+  )
+  const [pins, setPins] = useState<RegistryPin[]>(() => loadPins())
+  const [selectedPinId, setSelectedPinId] = useState<string | null>(null)
+  const selectedPin = pins.find(p => p.id === selectedPinId) ?? null
+  const baselineFor = selectedPin
+    ? { prompt: selectedPin.prompt, tools: selectedPin.tools, skills: selectedPin.skills }
+    : undefined
+  const pinCurrent = () => {
+    const label = window.prompt(
+      'Label for this baseline pin?',
+      `pin-${new Date().toLocaleString()}`,
+    )
+    if (!label) return
+    const next = addPin({
+      label,
+      prompt: sources.prompt,
+      tools: sampleRegistryTools,
+      skills: sampleRegistrySkills,
+    })
+    setPins(next)
+    setSelectedPinId(next[next.length - 1].id)
+  }
+  const removePinAt = (id: string) => {
+    setPins(removePin(id))
+    if (selectedPinId === id) setSelectedPinId(null)
+  }
   const structure = useStructure(source, nav.docType, runnerConfig.model)
   const structureReport = structure.report
   const structureHash = useMemo(
@@ -169,7 +211,45 @@ function App() {
     }
     switch (nav.active.view) {
       case 'tests':
-        return <Placeholder title="Tests" note="Tests view migration lands in N5." />
+        return (
+          <TestsView
+            tests={tests.tests}
+            results={tests.results}
+            baselineResults={tests.baselineResults}
+            loading={tests.loading}
+            error={tests.error}
+            sidecar={tests.sidecar}
+            useMock={useMock}
+            onToggleMock={toggleMock}
+            runnerConfig={runnerConfig}
+            onRunnerConfig={updateRunnerConfig}
+            targets={targets}
+            pins={pins}
+            selectedPinId={selectedPinId}
+            onSelectPin={setSelectedPinId}
+            onPinCurrent={pinCurrent}
+            onRemovePin={removePinAt}
+            onClearBaseline={tests.clearBaseline}
+            onRunAll={() => tests.run({
+              prompt: sources.prompt,
+              tools: sampleRegistryTools,
+              skills: sampleRegistrySkills,
+              config: { mock: useMock, ...runnerConfig },
+            }, baselineFor)}
+            onRunOne={id => tests.run({
+              prompt: sources.prompt,
+              tools: sampleRegistryTools,
+              skills: sampleRegistrySkills,
+              onlyIds: [id],
+              config: { mock: useMock, ...runnerConfig },
+            }, baselineFor)}
+            onCancel={tests.cancel}
+            onUpsert={tests.upsert}
+            onRemove={tests.remove}
+            onReset={tests.reset}
+            onClearCache={tests.clearCache}
+          />
+        )
       case 'registry':
         return <Placeholder title="Registry" note="Registry migration lands in N8." />
       case 'settings':
