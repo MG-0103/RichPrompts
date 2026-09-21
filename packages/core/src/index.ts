@@ -51,6 +51,8 @@ export {
   estimateTokens,
   splitParagraphs,
   detectNoise,
+  applyNoiseFix,
+  isNoiseFixable,
   detectDuplicationClusters,
   analyzeDuplication,
   clusterByPairwiseSimilarity,

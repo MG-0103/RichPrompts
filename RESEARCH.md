@@ -89,8 +89,10 @@ i.e. the exact same union-find/threshold machinery but with a semantic score.
   bi-encoder retrieves the top-K candidate pairs, cross-encoder scores each
   pair jointly and re-orders. `BAAI/bge-reranker-base` is 68 MB and fits in a
   sidecar.
-- Threshold 0.5 is too low for cosine over MiniLM in most tests; 0.72–0.78 is
-  the usual sweet spot. Worth an ablation.
+- Our semantic threshold is already **0.72** (see
+  `useSemanticDuplication.ts:22`), which is in the recommended sweet spot
+  for cosine over MiniLM. No retune needed — the 0.5 figure in an earlier
+  draft of this doc was the trigram Jaccard threshold, not the cosine one.
 
 **Upgrade path.**
 1. Retune the cosine threshold with a small hand-labeled set (5-10 known
@@ -299,8 +301,9 @@ Ordered by lift-per-hour, based on the above:
 
 1. **Corpus regression tests.** Half a day. Locks in every rule tune-up we
    ship. This unblocks 1.3 in BACKLOG.
-2. **Retune semantic-cosine threshold** with a small labeled set. Half a day.
-   Directly cuts false-positive clusters that users will otherwise see.
+2. ~~**Retune semantic-cosine threshold**~~ — already at 0.72, in the
+   recommended sweet spot. Not actionable without a labeled corpus to prove
+   a specific move is a lift.
 3. **New rule: XML-tag adoption on long prompts.** ~2 hours. Highest-lift
    Anthropic-specific miss in our current ruleset.
 4. **New rule: caching-order hint.** ~2 hours. Real cost/latency implications

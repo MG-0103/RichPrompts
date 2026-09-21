@@ -9,7 +9,7 @@ import type { SectionStats, StructureReport } from './types'
 export * from './types'
 export { budgetFor, estimateTokens } from './budget'
 export { splitParagraphs } from './paragraph'
-export { detectNoise } from './noise'
+export { detectNoise, applyNoiseFix, isNoiseFixable } from './noise'
 export type { NoiseFlag, NoiseKind } from './noise'
 export {
   detectDuplicationClusters,

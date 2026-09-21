@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  applyNoiseFix,
   badPrompt,
   badTool,
   badSkill,
@@ -9,6 +10,7 @@ import {
   sampleRegistrySkills,
   type Diagnostic,
   type DocType,
+  type NoiseFlag,
   type Section,
 } from '@richprompt/core'
 import { useLinter } from './hooks/useLinter'
@@ -206,6 +208,9 @@ function App() {
   const onEditorChange = (next: string) => {
     setSources(s => ({ ...s, [nav.docType]: next }))
   }
+  const onFixNoise = (flag: NoiseFlag) => {
+    setSources(s => ({ ...s, [nav.docType]: applyNoiseFix(s[nav.docType], flag) }))
+  }
   const jumpToDiagnostic = (d: Diagnostic) => {
     nav.openWorkbench()
     requestAnimationFrame(() => editorRef.current?.jumpTo(d))
@@ -282,6 +287,7 @@ function App() {
             dismissed={dismissed}
             onToggleDismiss={onToggleDismiss}
             onClearDismissals={onClearDismissals}
+            onFixNoise={onFixNoise}
             liveChars={source.length}
             loading={structure.loading}
             stale={structure.stale}

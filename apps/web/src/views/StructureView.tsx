@@ -5,6 +5,7 @@ import {
   type CanonicalSection,
   type DuplicationCluster,
   type DuplicationEdge,
+  isNoiseFixable,
   type NoiseFlag,
   type NoiseKind,
   type Paragraph,
@@ -28,6 +29,7 @@ interface Props {
   dismissed: Set<string>
   onToggleDismiss: (id: string) => void
   onClearDismissals: () => void
+  onFixNoise?: (flag: NoiseFlag) => void
   liveChars: number
   loading: boolean
   stale: boolean
@@ -103,6 +105,7 @@ export function StructureView({
   dismissed,
   onToggleDismiss,
   onClearDismissals,
+  onFixNoise,
   liveChars,
   loading,
   stale,
@@ -175,7 +178,7 @@ export function StructureView({
         onDeactivateSemantic={onDeactivateSemantic}
         rangeFor={rangeFor}
       />
-      <NoiseCard flags={activeNoise} onJump={onJump} onDismiss={onToggleDismiss} rangeFor={rangeFor} />
+      <NoiseCard flags={activeNoise} onJump={onJump} onDismiss={onToggleDismiss} onFix={onFixNoise} rangeFor={rangeFor} />
       {dismissedCount > 0 && (
         <div className="flex items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
           {dismissedCount} finding{dismissedCount === 1 ? '' : 's'} dismissed for this doc version.
@@ -708,11 +711,12 @@ function ExtractionCard({
 }
 
 function NoiseCard({
-  flags, onJump, onDismiss, rangeFor,
+  flags, onJump, onDismiss, onFix, rangeFor,
 }: {
   flags: NoiseFlag[]
   onJump: (offset: number) => void
   onDismiss: (id: string) => void
+  onFix?: (f: NoiseFlag) => void
   rangeFor: (start: number, end: number) => string
 }) {
   if (flags.length === 0) {
@@ -743,6 +747,17 @@ function NoiseCard({
                 <span className="text-muted-foreground"> · {f.suggestion}</span>
               </span>
               <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={() => onJump(f.range.startOffset)}>jump</Button>
+              {onFix && isNoiseFixable(f) && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-6 px-2 text-[10px]"
+                  onClick={() => onFix(f)}
+                  title={f.suggestion}
+                >
+                  fix
+                </Button>
+              )}
               <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={() => onDismiss(f.id)}>dismiss</Button>
             </li>
           ))}

@@ -6,6 +6,8 @@ import {
   detectDuplicationClusters,
   detectExtractionCandidates,
   detectNoise,
+  applyNoiseFix,
+  isNoiseFixable,
   estimateTokens,
   longestCommonSubstring,
   sharedPhrases,
@@ -96,6 +98,34 @@ describe('detectNoise', () => {
     // Only the outer html-comment should survive de-dupe
     expect(flags.filter(f => f.kind === 'html-comment')).toHaveLength(1)
     expect(flags.filter(f => f.kind === 'author-marker')).toHaveLength(0)
+  })
+})
+
+describe('applyNoiseFix', () => {
+  it('deletes an HTML comment and its trailing newline', () => {
+    const raw = 'keep me\n<!-- gone -->\nalso keep me\n'
+    const [flag] = detectNoise(raw, []).filter(f => f.kind === 'html-comment')
+    expect(applyNoiseFix(raw, flag)).toBe('keep me\nalso keep me\n')
+  })
+
+  it('collapses a blank run to a single blank line', () => {
+    const raw = 'before\n\n\n\n\nafter'
+    const [flag] = detectNoise(raw, []).filter(f => f.kind === 'blank-run')
+    expect(applyNoiseFix(raw, flag)).toBe('before\n\nafter')
+  })
+
+  it('removes a placeholder token in place', () => {
+    const raw = 'value is [REDACTED] here'
+    const [flag] = detectNoise(raw, []).filter(f => f.kind === 'placeholder')
+    expect(applyNoiseFix(raw, flag)).toBe('value is  here')
+  })
+
+  it('leaves boilerplate tail untouched (not a safe unattended fix)', () => {
+    const raw = '# Role\n\nYou are expert.\n\nDo work.\n\nYou are a helpful assistant.'
+    const parsed = parseDocument(raw, 'prompt')
+    const [flag] = detectNoise(raw, parsed.sections).filter(f => f.kind === 'boilerplate-tail')
+    expect(applyNoiseFix(raw, flag)).toBe(raw)
+    expect(isNoiseFixable(flag)).toBe(false)
   })
 })
 

@@ -134,6 +134,38 @@ function findCanonicalPersonaOffset(raw: string, roleSections: Section[]): numbe
   return null
 }
 
+/**
+ * Apply the "safe delete" autofix for a noise flag. Every noise kind
+ * except `blank-run` removes the flagged range outright plus any single
+ * trailing newline (to avoid leaving a blank line where a comment used
+ * to be). `blank-run` collapses to exactly one blank line (two `\n`).
+ *
+ * Boilerplate is kept out of the safe-delete set intentionally — its
+ * removal often needs the user to move the persona line first, so we
+ * only surface the finding, not a one-click fix.
+ */
+export function applyNoiseFix(source: string, flag: NoiseFlag): string {
+  const { startOffset, endOffset } = flag.range
+  if (startOffset < 0 || endOffset > source.length || endOffset < startOffset) {
+    return source
+  }
+  if (flag.kind === 'blank-run') {
+    return source.slice(0, startOffset) + '\n\n' + source.slice(endOffset)
+  }
+  if (flag.kind === 'boilerplate-tail') {
+    // Not a safe unattended fix — bail out unchanged.
+    return source
+  }
+  let cut = endOffset
+  if (source[cut] === '\n') cut += 1
+  return source.slice(0, startOffset) + source.slice(cut)
+}
+
+/** True when this flag has a deterministic autofix wired up. */
+export function isNoiseFixable(flag: NoiseFlag): boolean {
+  return flag.kind !== 'boilerplate-tail'
+}
+
 function dedupeByRange(flags: NoiseFlag[]): NoiseFlag[] {
   flags.sort((a, b) =>
     a.range.startOffset - b.range.startOffset ||
