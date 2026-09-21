@@ -4,6 +4,21 @@ Deferred ideas, revisit before shipping.
 
 ---
 
+## Recently-added checks (2026-09-21)
+
+- [ ] **Verify Monaco diagnostic hover still fires post-trim.** After
+  moving to the lean Monaco setup (markdown + json only, loader
+  swapped to our pre-imported instance) I did not observe a live
+  hover popup. Provider wiring in `monaco/providers.ts` and
+  `EditorPane.tsx` looks intact; markers are still set via
+  `setModelMarkers`. Verify by hovering an actual squiggle in the
+  running dev server — expect Monaco's native marker hover (severity
+  + message) AND our custom hover (rule id + fix hint + docs ref).
+  If it's dark, most likely the wire-up is fine and the tested
+  diagnostic wasn't at the hover offset; if the provider really
+  didn't attach, the fix is to force a `mon.languages.register({
+  id: language })` inside `installProviders` before registering hover.
+
 ## Active queue (2026-09-17)
 
 Decided during the "current implementation refinement" discussion.
