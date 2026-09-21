@@ -15,6 +15,7 @@ import { useLinter } from './hooks/useLinter'
 import { useStructure } from './hooks/useStructure'
 import { useSemanticDuplication } from './hooks/useSemanticDuplication'
 import { useTests } from './hooks/useTests'
+import { useVersioning } from './hooks/useVersioning'
 import { loadConfig } from './persistence/config'
 import { loadTestingConfig, saveTestingConfig } from './persistence/testConfig'
 import { clearDismissals, loadDismissals, toggleDismissal } from './persistence/dismissals'
@@ -30,6 +31,7 @@ import { Placeholder } from './views/Placeholder'
 import { EditorView, type EditorController } from './views/EditorView'
 import { StructureView } from './views/StructureView'
 import { TestsView } from './views/TestsView'
+import { HistoryView } from './views/HistoryView'
 
 const FIXTURES: Record<DocType, string> = {
   prompt: badPrompt,
@@ -97,6 +99,25 @@ function App() {
     setPins(removePin(id))
     if (selectedPinId === id) setSelectedPinId(null)
   }
+
+  const versioning = useVersioning(sources)
+  const restoreVersion = (content: string) => {
+    setSources(s => ({ ...s, [nav.docType]: content }))
+  }
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        const label = window.prompt(`Label for this commit of "${nav.docType}"?`, '')
+        if (label && label.trim()) {
+          versioning.commit(nav.docType, label)
+          nav.selectDocView('history')
+        }
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [nav.docType, versioning, nav])
   const structure = useStructure(source, nav.docType, runnerConfig.model)
   const structureReport = structure.report
   const structureHash = useMemo(
@@ -204,7 +225,17 @@ function App() {
             />
           )
         case 'history':
-          return <Placeholder title="History" note="History view migration lands in N6." />
+          return (
+            <HistoryView
+              docType={nav.docType}
+              currentContent={source}
+              versions={versioning.versions[nav.docType] ?? []}
+              onCommit={label => versioning.commit(nav.docType, label)}
+              onRename={(id, label) => versioning.rename(nav.docType, id, label)}
+              onDelete={id => versioning.remove(nav.docType, id)}
+              onRestore={restoreVersion}
+            />
+          )
         case 'review':
           return <Placeholder title="LLM Review" note="LLM Review migration lands in N7." />
       }
