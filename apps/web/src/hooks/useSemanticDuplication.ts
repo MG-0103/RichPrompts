@@ -11,6 +11,13 @@ import {
 import { embedTexts } from '../testing/embed'
 import { verifyPairs, type VerifyVerdict } from '../testing/verify'
 import { verifyExtractionCandidates } from '../testing/verifyExtract'
+import {
+  readSemanticCache,
+  writeSemanticCache,
+  listSemanticCache,
+  clearSemanticCache,
+  type SemanticCacheEntry,
+} from '../persistence/semanticCache'
 
 const SEMANTIC_THRESHOLD = 0.72   // cosine threshold for cluster edges
 const MIN_CHARS = 60              // same as trigram path
@@ -88,6 +95,14 @@ export function useSemanticDuplication(
 ): SemanticState & {
   activate: () => Promise<void>
   deactivate: () => void
+  /** Force a fresh embedding pass, ignoring any persisted cache entry. */
+  reanalyze: () => Promise<void>
+  /** Persisted results across doc versions — newest first. */
+  history: SemanticCacheEntry[]
+  /** Restore a historical entry into the live state without re-running. */
+  restoreEntry: (hash: string) => boolean
+  /** Drop the entry for the current doc hash. */
+  clearForCurrent: () => void
 } {
   const [active, setActive] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -105,7 +120,24 @@ export function useSemanticDuplication(
   const [verified, setVerified] = useState(false)
   const [lastVerifyCached, setLastVerifyCached] = useState(0)
   const [lastVerifyFetched, setLastVerifyFetched] = useState(0)
+  const [history, setHistory] = useState<SemanticCacheEntry[]>(() => listSemanticCache())
   const abortRef = useRef<AbortController | null>(null)
+
+  const hydrateFrom = useCallback((entry: SemanticCacheEntry) => {
+    setAnalysis(entry.analysis)
+    setEdgeLabels(entry.edgeLabels)
+    setContradictions(entry.contradictions)
+    setVerifiedExtractions(entry.verifiedExtractions)
+    setVerified(entry.verified)
+    setComputedHash(entry.hash)
+    setComputedChars(entry.computedChars)
+    setLastDurationMs(entry.lastDurationMs)
+    setLastCachedCount(entry.lastCachedCount)
+    setLastFetchedCount(entry.lastFetchedCount)
+    setLastVerifyCached(entry.lastVerifyCached)
+    setLastVerifyFetched(entry.lastVerifyFetched)
+    setError(null)
+  }, [])
 
   const stale = active && analysis !== null && sourceHash !== computedHash
 
@@ -170,6 +202,12 @@ export function useSemanticDuplication(
 
       // ---------- Verification ----------
       let verifyMs = 0
+      let verifyCached = 0
+      let verifyFetched = 0
+      let didVerify = false
+      let finalLabels: EdgeLabelMap = {}
+      let finalContras: ContradictionFinding[] = []
+      let finalExtracts: VerifiedExtraction[] = []
       if (opts.verifierAvailable && result.edges.length > 0) {
         setPhase('verifying')
         const pById = new Map(paragraphs.map(p => [p.id, p]))
@@ -189,15 +227,13 @@ export function useSemanticDuplication(
             { signal: ctrl.signal },
           )
           if (ctrl.signal.aborted) return
-          const labels: EdgeLabelMap = {}
-          const contras: ContradictionFinding[] = []
           for (let i = 0; i < pairs.length; i++) {
             const verdict = v.verdicts[i]
-            labels[edgeKey(pairs[i].edge)] = verdict
+            finalLabels[edgeKey(pairs[i].edge)] = verdict
             if (verdict.label === 'contradictory') {
               const pa = pById.get(pairs[i].edge.from)!
               const pb = pById.get(pairs[i].edge.to)!
-              contras.push({
+              finalContras.push({
                 id: `contra-${i}`,
                 fromId: pairs[i].edge.from,
                 toId: pairs[i].edge.to,
@@ -208,15 +244,16 @@ export function useSemanticDuplication(
               })
             }
           }
-          setEdgeLabels(labels)
-          setContradictions(contras)
+          setEdgeLabels(finalLabels)
+          setContradictions(finalContras)
           setVerified(true)
           setLastVerifyCached(v.cachedCount)
           setLastVerifyFetched(v.fetchedCount)
+          verifyCached = v.cachedCount
+          verifyFetched = v.fetchedCount
           verifyMs = v.durationMs
+          didVerify = true
         } catch (e) {
-          // Verifier failure is not fatal — keep the semantic clusters,
-          // just surface a warning.
           if ((e as Error).name !== 'AbortError') {
             setError(`Verifier failed: ${(e as Error).message}. Showing unverified semantic clusters.`)
           }
@@ -241,27 +278,43 @@ export function useSemanticDuplication(
               { signal: ctrl.signal },
             )
             if (ctrl.signal.aborted) return
-            const kept: VerifiedExtraction[] = []
             for (let i = 0; i < rawCandidates.length; i++) {
               const verdict = evres.verdicts[i]
               if (verdict?.decision === 'extract') {
-                kept.push({ candidate: rawCandidates[i], reason: verdict.reason })
+                finalExtracts.push({ candidate: rawCandidates[i], reason: verdict.reason })
               }
             }
-            setVerifiedExtractions(kept)
+            setVerifiedExtractions(finalExtracts)
             extractMs = evres.durationMs
           } catch (e) {
-            // Non-fatal; keep duplication results.
-            if ((e as Error).name !== 'AbortError') {
-              // Only warn if not already flagged by duplication verifier.
-              // The main error state is prioritized for the more central signal.
-            }
+            if ((e as Error).name !== 'AbortError') { /* non-fatal */ }
           }
         }
       }
 
       setPhase('idle')
-      setLastDurationMs(embedRes.durationMs + clusterMs + verifyMs + extractMs)
+      const total = embedRes.durationMs + clusterMs + verifyMs + extractMs
+      setLastDurationMs(total)
+
+      // Persist the successful run so switching tabs / reloading reuses
+      // it instead of re-embedding.
+      const chars = paragraphs.reduce((a, p) => a + p.text.length, 0)
+      writeSemanticCache({
+        hash: sourceHash,
+        timestamp: Date.now(),
+        analysis: result,
+        edgeLabels: finalLabels,
+        contradictions: finalContras,
+        verifiedExtractions: finalExtracts,
+        verified: didVerify,
+        computedChars: chars,
+        lastDurationMs: total,
+        lastCachedCount: embedRes.cachedCount,
+        lastFetchedCount: embedRes.fetchedCount,
+        lastVerifyCached: verifyCached,
+        lastVerifyFetched: verifyFetched,
+      })
+      setHistory(listSemanticCache())
     } catch (e) {
       if ((e as Error).name === 'AbortError') return
       setError((e as Error).message)
@@ -273,6 +326,16 @@ export function useSemanticDuplication(
 
   const activate = useCallback(async () => {
     setActive(true)
+    const cached = readSemanticCache(sourceHash)
+    if (cached) {
+      hydrateFrom(cached)
+      return
+    }
+    await run()
+  }, [run, sourceHash, hydrateFrom])
+
+  const reanalyze = useCallback(async () => {
+    setActive(true)
     await run()
   }, [run])
 
@@ -282,11 +345,35 @@ export function useSemanticDuplication(
     setError(null)
   }, [])
 
+  const restoreEntry = useCallback((hash: string): boolean => {
+    const entry = readSemanticCache(hash)
+    if (!entry) return false
+    setActive(true)
+    hydrateFrom(entry)
+    return true
+  }, [hydrateFrom])
+
+  const clearForCurrent = useCallback(() => {
+    clearSemanticCache(sourceHash)
+    setHistory(listSemanticCache())
+  }, [sourceHash])
+
   useEffect(() => {
     if (!active) return
     if (sourceHash === computedHash) return
     // Stale — presentation layer surfaces the banner + refresh button.
   }, [active, sourceHash, computedHash])
+
+  // On mount / hash change, auto-restore a cached entry so switching
+  // right-pane tabs doesn't lose the deep analysis.
+  useEffect(() => {
+    const cached = readSemanticCache(sourceHash)
+    if (!cached) return
+    if (computedHash === sourceHash) return
+    setActive(true)
+    hydrateFrom(cached)
+
+  }, [sourceHash])
 
   return {
     active,
@@ -307,5 +394,9 @@ export function useSemanticDuplication(
     lastVerifyFetched,
     activate,
     deactivate,
+    reanalyze,
+    history,
+    restoreEntry,
+    clearForCurrent,
   }
 }

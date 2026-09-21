@@ -22,6 +22,8 @@ import { cn } from '@/lib/utils'
 
 interface Props {
   report: StructureReport
+  /** Live source text — used to compute line numbers for finding ranges. */
+  source: string
   onJump: (offset: number) => void
   dismissed: Set<string>
   onToggleDismiss: (id: string) => void
@@ -37,6 +39,33 @@ interface Props {
   onDeactivateSemantic: () => void
   openaiReady: boolean
   openaiReason: string | null
+}
+
+/** Build a line-index: lineStarts[i] = char offset where line i begins. */
+function buildLineIndex(source: string): number[] {
+  const starts = [0]
+  for (let i = 0; i < source.length; i++) {
+    if (source.charCodeAt(i) === 10) starts.push(i + 1)
+  }
+  return starts
+}
+
+/** Binary search for the 1-indexed line containing `offset`. */
+function lineOf(lineStarts: number[], offset: number): number {
+  let lo = 0
+  let hi = lineStarts.length - 1
+  while (lo < hi) {
+    const mid = (lo + hi + 1) >> 1
+    if (lineStarts[mid] <= offset) lo = mid
+    else hi = mid - 1
+  }
+  return lo + 1
+}
+
+function fmtLineRange(lineStarts: number[], startOffset: number, endOffset: number): string {
+  const a = lineOf(lineStarts, startOffset)
+  const b = lineOf(lineStarts, Math.max(startOffset, endOffset - 1))
+  return a === b ? `L${a}` : `L${a}–${b}`
 }
 
 const SECTION_HEX: Record<CanonicalSection, string> = {
@@ -69,6 +98,7 @@ const NOISE_LABELS: Record<NoiseKind, string> = {
 
 export function StructureView({
   report,
+  source,
   onJump,
   dismissed,
   onToggleDismiss,
@@ -98,6 +128,11 @@ export function StructureView({
     for (const p of paragraphs) m.set(p.id, p)
     return m
   }, [paragraphs])
+  const lineStarts = useMemo(() => buildLineIndex(source), [source])
+  const rangeFor = useMemo(
+    () => (start: number, end: number) => fmtLineRange(lineStarts, start, end),
+    [lineStarts],
+  )
 
   const activeDups = activeClusters.filter(c => !dismissed.has(c.id))
   const activeNoise = noise.filter(n => !dismissed.has(n.id))
@@ -117,12 +152,12 @@ export function StructureView({
         onReanalyze={onReanalyze}
       />
       <BudgetCard budget={budget} chars={chars} approxTokens={approxTokens} />
-      <SectionsCard sections={sections} totalChars={chars} onJump={onJump} />
+      <SectionsCard sections={sections} totalChars={chars} onJump={onJump} rangeFor={rangeFor} />
       {usingSemantic && semantic.verified && semantic.contradictions.length > 0 && (
-        <ContradictionCard items={semantic.contradictions} onJump={onJump} />
+        <ContradictionCard items={semantic.contradictions} onJump={onJump} rangeFor={rangeFor} />
       )}
       {usingSemantic && semantic.verifiedExtractions.length > 0 && (
-        <ExtractionCard items={semantic.verifiedExtractions} onJump={onJump} />
+        <ExtractionCard items={semantic.verifiedExtractions} onJump={onJump} rangeFor={rangeFor} />
       )}
       <DuplicationCard
         clusters={activeDups}
@@ -138,8 +173,9 @@ export function StructureView({
         openaiReason={openaiReason}
         onActivateSemantic={onActivateSemantic}
         onDeactivateSemantic={onDeactivateSemantic}
+        rangeFor={rangeFor}
       />
-      <NoiseCard flags={activeNoise} onJump={onJump} onDismiss={onToggleDismiss} />
+      <NoiseCard flags={activeNoise} onJump={onJump} onDismiss={onToggleDismiss} rangeFor={rangeFor} />
       {dismissedCount > 0 && (
         <div className="flex items-center gap-2 rounded-md border border-dashed border-border px-3 py-2 text-xs text-muted-foreground">
           {dismissedCount} finding{dismissedCount === 1 ? '' : 's'} dismissed for this doc version.
@@ -236,8 +272,13 @@ function BudgetCard({
 }
 
 function SectionsCard({
-  sections, totalChars, onJump,
-}: { sections: StructureReport['sections']; totalChars: number; onJump: (offset: number) => void }) {
+  sections, totalChars, onJump, rangeFor,
+}: {
+  sections: StructureReport['sections']
+  totalChars: number
+  onJump: (offset: number) => void
+  rangeFor: (start: number, end: number) => string
+}) {
   if (sections.length === 0) {
     return (
       <Card>
@@ -299,6 +340,7 @@ function SectionsCard({
             <tr className="border-b border-border text-left text-muted-foreground">
               <th className="w-4 py-1.5"></th>
               <th className="py-1.5 pr-3 font-medium">section</th>
+              <th className="py-1.5 pr-3 font-medium">lines</th>
               <th className="py-1.5 pr-3 text-right font-medium">chars</th>
               <th className="py-1.5 pr-3 text-right font-medium">~tokens</th>
               <th className="py-1.5 pr-3 text-right font-medium">share</th>
@@ -321,6 +363,9 @@ function SectionsCard({
                 <td className="py-1.5 pr-3">
                   {labelFor(s)}
                   {s === largest && <Badge variant="outline" className="ml-2 h-4 border-amber-500/40 text-[9px] text-amber-600 dark:text-amber-400">largest</Badge>}
+                </td>
+                <td className="py-1.5 pr-3 font-mono text-[10px] text-muted-foreground">
+                  {rangeFor(s.startOffset, s.endOffset)}
                 </td>
                 <td className="py-1.5 pr-3 text-right font-mono">{s.chars.toLocaleString()}</td>
                 <td className="py-1.5 pr-3 text-right font-mono">{s.approxTokens.toLocaleString()}</td>
@@ -417,6 +462,7 @@ const VERDICT_STYLE: Record<'duplicate' | 'contradictory' | 'related' | 'unrelat
 function DuplicationCard({
   clusters, edges, edgeLabels, paragraphById, paragraphs, onJump, onDismiss,
   semantic, usingSemantic, openaiReady, openaiReason, onActivateSemantic, onDeactivateSemantic,
+  rangeFor,
 }: {
   clusters: DuplicationCluster[]; edges: DuplicationEdge[]
   edgeLabels: SemanticState['edgeLabels']
@@ -425,6 +471,7 @@ function DuplicationCard({
   semantic: SemanticState; usingSemantic: boolean
   openaiReady: boolean; openaiReason: string | null
   onActivateSemantic: () => void | Promise<void>; onDeactivateSemantic: () => void
+  rangeFor: (start: number, end: number) => string
 }) {
   const activeEdges = useMemo(() => {
     const active = new Set(clusters.map(c => c.id))
@@ -486,6 +533,11 @@ function DuplicationCard({
                 .map(id => paragraphById.get(id))
                 .filter((p): p is Paragraph => !!p)
               const verdict = verdicts[c.id]
+              const linesLabel = (() => {
+                const labels = members.slice(0, 4).map(p => rangeFor(p.startOffset, p.endOffset))
+                const suffix = members.length > 4 ? ` +${members.length - 4}` : ''
+                return labels.join(', ') + suffix
+              })()
               return (
                 <li key={c.id} className="py-2">
                   <button
@@ -498,6 +550,9 @@ function DuplicationCard({
                     />
                     <Badge variant="secondary" className="text-[10px]">{c.paragraphIds.length}×</Badge>
                     <span className="font-mono text-xs text-muted-foreground">{Math.round(c.similarity * 100)}%</span>
+                    <span className="font-mono text-[10px] text-muted-foreground" title="Line ranges of cluster members">
+                      {linesLabel}
+                    </span>
                     {verdict && (
                       <Badge variant="outline" className={cn('text-[10px]', VERDICT_STYLE[verdict])}>{verdict}</Badge>
                     )}
@@ -519,7 +574,9 @@ function DuplicationCard({
                             className="flex w-full items-start gap-2 rounded px-2 py-1 text-left text-xs hover:bg-accent/40"
                             onClick={() => onJump(p.startOffset)}
                           >
-                            <span className="shrink-0 font-mono text-muted-foreground">@{p.startOffset}</span>
+                            <span className="shrink-0 font-mono text-muted-foreground">
+                              {rangeFor(p.startOffset, p.endOffset)}
+                            </span>
                             {p.section && <Badge variant="outline" className="shrink-0 text-[9px]">{p.section}</Badge>}
                             <span className="min-w-0 truncate">
                               {p.text.trim().slice(0, 140).replace(/\n/g, ' ↩ ')}
@@ -565,8 +622,12 @@ function SharedContent({ cluster }: { cluster: DuplicationCluster }) {
 }
 
 function ContradictionCard({
-  items, onJump,
-}: { items: ContradictionFinding[]; onJump: (offset: number) => void }) {
+  items, onJump, rangeFor,
+}: {
+  items: ContradictionFinding[]
+  onJump: (offset: number) => void
+  rangeFor: (start: number, end: number) => string
+}) {
   return (
     <Card>
       <CardHeader className="pb-2">
@@ -581,6 +642,9 @@ function ContradictionCard({
             <li key={c.id} className="flex items-center gap-2 py-2">
               <Badge variant="destructive" className="text-[10px]">contradiction</Badge>
               <span className="font-mono text-xs text-muted-foreground">{Math.round(c.similarity * 100)}%</span>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {rangeFor(c.fromOffset, c.fromOffset + 1)} vs {rangeFor(c.toOffset, c.toOffset + 1)}
+              </span>
               <span className="flex-1 text-xs">
                 {c.reason || 'Model flagged these two paragraphs as conflicting.'}
               </span>
@@ -595,8 +659,12 @@ function ContradictionCard({
 }
 
 function ExtractionCard({
-  items, onJump,
-}: { items: VerifiedExtraction[]; onJump: (offset: number) => void }) {
+  items, onJump, rangeFor,
+}: {
+  items: VerifiedExtraction[]
+  onJump: (offset: number) => void
+  rangeFor: (start: number, end: number) => string
+}) {
   const [copiedId, setCopiedId] = useState<string | null>(null)
   const copy = async (id: string, snippet: string) => {
     try {
@@ -618,6 +686,9 @@ function ExtractionCard({
           {items.map(({ candidate: x, reason }) => (
             <li key={x.id} className="flex items-center gap-2 py-2">
               <Badge variant="outline" className="text-[10px]">{x.target}</Badge>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {rangeFor(x.range.startOffset, x.range.endOffset)}
+              </span>
               <span className="flex-1 text-xs">{reason || x.reason}</span>
               <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={() => onJump(x.range.startOffset)}>jump</Button>
               <Button
@@ -637,8 +708,13 @@ function ExtractionCard({
 }
 
 function NoiseCard({
-  flags, onJump, onDismiss,
-}: { flags: NoiseFlag[]; onJump: (offset: number) => void; onDismiss: (id: string) => void }) {
+  flags, onJump, onDismiss, rangeFor,
+}: {
+  flags: NoiseFlag[]
+  onJump: (offset: number) => void
+  onDismiss: (id: string) => void
+  rangeFor: (start: number, end: number) => string
+}) {
   if (flags.length === 0) {
     return (
       <Card>
@@ -659,6 +735,9 @@ function NoiseCard({
           {flags.map(f => (
             <li key={f.id} className="flex items-center gap-2 py-2 text-xs">
               <Badge variant="outline" className="text-[10px]">{NOISE_LABELS[f.kind]}</Badge>
+              <span className="font-mono text-[10px] text-muted-foreground">
+                {rangeFor(f.range.startOffset, f.range.endOffset)}
+              </span>
               <span className="flex-1">
                 <span className="font-medium">{f.message}</span>
                 <span className="text-muted-foreground"> · {f.suggestion}</span>

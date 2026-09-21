@@ -30,8 +30,7 @@ import { useNavigation } from './shell/useNavigation'
 import { useTheme } from './shell/useTheme'
 import { rightPaneLabel, workspaceLabel } from './shell/views'
 import type { Crumb } from './shell/Breadcrumbs'
-import { EditorPane, type EditorController } from './views/EditorPane'
-import { Workbench } from './views/Workbench'
+import type { EditorController } from './views/EditorPane'
 import { Placeholder } from './views/Placeholder'
 import { Loader2 } from 'lucide-react'
 
@@ -58,6 +57,10 @@ const RegistryView = lazy(() =>
 )
 const SettingsView = lazy(() =>
   import('./views/SettingsView').then(m => ({ default: m.SettingsView })),
+)
+// Bundles Monaco + Editor + Workbench into one lazy chunk.
+const WorkbenchBundle = lazy(() =>
+  import('./views/WorkbenchBundle').then(m => ({ default: m.WorkbenchBundle })),
 )
 
 function ViewFallback() {
@@ -269,6 +272,7 @@ function App() {
         return (
           <StructureView
             report={structureReport}
+            source={source}
             onJump={jumpToOffset}
             dismissed={dismissed}
             onToggleDismiss={onToggleDismiss}
@@ -315,19 +319,15 @@ function App() {
   const rightContent = <Suspense fallback={<ViewFallback />}>{rightContentInner}</Suspense>
 
   const workbench = (
-    <Workbench
-      editor={
-        <EditorPane
-          ref={editorRef}
-          source={source}
-          docType={nav.docType}
-          onDocTypeChange={nav.changeDocType}
-          diagnostics={diagnostics}
-          sections={sections}
-          onChange={onEditorChange}
-          theme={theme}
-        />
-      }
+    <WorkbenchBundle
+      source={source}
+      docType={nav.docType}
+      onDocTypeChange={nav.changeDocType}
+      diagnostics={diagnostics}
+      sections={sections}
+      onChange={onEditorChange}
+      theme={theme}
+      editorRef={editorRef}
       rightPane={nav.rightPane}
       onRightPaneChange={nav.changeRightPane}
       rightContent={rightContent}
