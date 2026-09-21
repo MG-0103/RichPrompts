@@ -3,13 +3,13 @@ import type { Diagnostic, Section } from '@richprompt/core'
 import { TopNavbar } from './TopNavbar'
 import { Breadcrumbs, type Crumb } from './Breadcrumbs'
 import { ProblemsStrip } from './ProblemsStrip'
-import type { ActiveView, DocView, WorkspaceView } from './views'
+import type { ActiveView, WorkspaceView } from './views'
 import type { Theme } from './useTheme'
 
 interface Props {
   active: ActiveView
-  onSelectDocView: (view: DocView) => void
-  onSelectWorkspaceView: (view: WorkspaceView) => void
+  onOpenWorkbench: () => void
+  onOpenWorkspace: (view: WorkspaceView) => void
   crumbs: Crumb[]
   canGoBack: boolean
   onBack: () => void
@@ -23,8 +23,8 @@ interface Props {
 
 export function AppShell({
   active,
-  onSelectDocView,
-  onSelectWorkspaceView,
+  onOpenWorkbench,
+  onOpenWorkspace,
   crumbs,
   canGoBack,
   onBack,
@@ -39,13 +39,13 @@ export function AppShell({
     <div className="flex h-full min-h-0 flex-col bg-background text-foreground">
       <TopNavbar
         active={active}
-        onSelectDocView={onSelectDocView}
-        onSelectWorkspaceView={onSelectWorkspaceView}
+        onOpenWorkbench={onOpenWorkbench}
+        onOpenWorkspace={onOpenWorkspace}
         theme={theme}
         onToggleTheme={onToggleTheme}
       />
       <Breadcrumbs crumbs={crumbs} canGoBack={canGoBack} onBack={onBack} />
-      <main className="min-h-0 flex-1 overflow-auto">{children}</main>
+      <main className="min-h-0 flex-1 overflow-hidden">{children}</main>
       <ProblemsStrip
         diagnostics={diagnostics}
         sections={sections}

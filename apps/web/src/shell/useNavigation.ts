@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useState } from 'react'
 import type { DocType } from '@richprompt/core'
-import type { ActiveView, DocView, WorkspaceView } from './views'
+import type { ActiveView, RightPaneView, WorkspaceView } from './views'
 
 const STORAGE_KEY = 'richprompt.nav.last'
 
 interface Stored {
   active: ActiveView
+  rightPane: RightPaneView
   docType: DocType
 }
 
@@ -14,57 +15,39 @@ function loadInitial(): Stored {
     const raw = localStorage.getItem(STORAGE_KEY)
     if (raw) return JSON.parse(raw) as Stored
   } catch { /* ignore */ }
-  return { active: { scope: 'doc', view: 'editor', docType: 'prompt' }, docType: 'prompt' }
-}
-
-function sameView(a: ActiveView, b: ActiveView): boolean {
-  if (a.scope !== b.scope) return false
-  if (a.scope === 'doc' && b.scope === 'doc') {
-    return a.view === b.view && a.docType === b.docType
+  return {
+    active: { scope: 'workbench' },
+    rightPane: 'preview',
+    docType: 'prompt',
   }
-  if (a.scope === 'workspace' && b.scope === 'workspace') return a.view === b.view
-  return false
 }
 
 export function useNavigation() {
   const initial = loadInitial()
   const [docType, setDocType] = useState<DocType>(initial.docType)
   const [active, setActive] = useState<ActiveView>(initial.active)
+  const [rightPane, setRightPane] = useState<RightPaneView>(initial.rightPane)
   const [stack, setStack] = useState<ActiveView[]>([])
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ active, docType }))
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ active, rightPane, docType }))
     } catch { /* ignore */ }
-  }, [active, docType])
+  }, [active, rightPane, docType])
 
-  const push = useCallback((next: ActiveView) => {
+  const openWorkspace = useCallback((view: WorkspaceView) => {
     setActive(prev => {
-      if (sameView(prev, next)) return prev
+      if (prev.scope === 'workspace' && prev.view === view) return prev
       setStack(s => [...s, prev])
-      return next
+      return { scope: 'workspace', view }
     })
   }, [])
 
-  const selectDocView = useCallback(
-    (view: DocView) => push({ scope: 'doc', view, docType }),
-    [push, docType],
-  )
-
-  const selectWorkspaceView = useCallback(
-    (view: WorkspaceView) => push({ scope: 'workspace', view }),
-    [push],
-  )
-
-  const changeDocType = useCallback((d: DocType) => {
-    setDocType(d)
+  const openWorkbench = useCallback(() => {
     setActive(prev => {
-      if (prev.scope === 'doc') {
-        const next: ActiveView = { scope: 'doc', view: prev.view, docType: d }
-        if (!sameView(prev, next)) setStack(s => [...s, prev])
-        return next
-      }
-      return prev
+      if (prev.scope === 'workbench') return prev
+      setStack(s => [...s, prev])
+      return { scope: 'workbench' }
     })
   }, [])
 
@@ -73,18 +56,22 @@ export function useNavigation() {
       if (s.length === 0) return s
       const next = s[s.length - 1]
       setActive(next)
-      if (next.scope === 'doc') setDocType(next.docType)
       return s.slice(0, -1)
     })
   }, [])
 
+  const changeDocType = useCallback((d: DocType) => setDocType(d), [])
+  const changeRightPane = useCallback((v: RightPaneView) => setRightPane(v), [])
+
   return {
     active,
     docType,
+    rightPane,
     canGoBack: stack.length > 0,
-    selectDocView,
-    selectWorkspaceView,
+    openWorkspace,
+    openWorkbench,
     changeDocType,
+    changeRightPane,
     back,
   }
 }

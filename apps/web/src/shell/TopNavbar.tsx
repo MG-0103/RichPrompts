@@ -1,4 +1,4 @@
-import { MoreHorizontal, FlaskConical, BookMarked, Settings, Sun, Moon } from 'lucide-react'
+import { MoreHorizontal, FlaskConical, BookMarked, Settings, Sun, Moon, LayoutTemplate } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -10,13 +10,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Separator } from '@/components/ui/separator'
 import { cn } from '@/lib/utils'
-import {
-  DOC_VIEWS,
-  WORKSPACE_VIEWS,
-  type ActiveView,
-  type DocView,
-  type WorkspaceView,
-} from './views'
+import { WORKSPACE_VIEWS, type ActiveView, type WorkspaceView } from './views'
 import type { Theme } from './useTheme'
 
 const WORKSPACE_ICONS: Record<WorkspaceView, typeof FlaskConical> = {
@@ -27,21 +21,21 @@ const WORKSPACE_ICONS: Record<WorkspaceView, typeof FlaskConical> = {
 
 interface Props {
   active: ActiveView
-  onSelectDocView: (view: DocView) => void
-  onSelectWorkspaceView: (view: WorkspaceView) => void
+  onOpenWorkbench: () => void
+  onOpenWorkspace: (view: WorkspaceView) => void
   theme: Theme
   onToggleTheme: () => void
 }
 
 export function TopNavbar({
   active,
-  onSelectDocView,
-  onSelectWorkspaceView,
+  onOpenWorkbench,
+  onOpenWorkspace,
   theme,
   onToggleTheme,
 }: Props) {
-  const currentDocView = active.scope === 'doc' ? active.view : null
-  const currentWorkspaceView = active.scope === 'workspace' ? active.view : null
+  const inWorkbench = active.scope === 'workbench'
+  const currentWorkspace = active.scope === 'workspace' ? active.view : null
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-border bg-background px-3">
@@ -51,22 +45,15 @@ export function TopNavbar({
 
       <Separator orientation="vertical" className="h-6" />
 
-      <nav className="flex items-center gap-0.5">
-        {DOC_VIEWS.map(v => (
-          <button
-            key={v.key}
-            onClick={() => onSelectDocView(v.key)}
-            className={cn(
-              'h-8 rounded-md px-3 text-sm transition-colors',
-              currentDocView === v.key
-                ? 'bg-accent text-accent-foreground'
-                : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
-            )}
-          >
-            {v.label}
-          </button>
-        ))}
-      </nav>
+      <Button
+        variant={inWorkbench ? 'secondary' : 'ghost'}
+        size="sm"
+        className={cn('h-8 gap-1.5 text-sm', !inWorkbench && 'text-muted-foreground')}
+        onClick={onOpenWorkbench}
+      >
+        <LayoutTemplate className="h-4 w-4" />
+        Workbench
+      </Button>
 
       <div className="ml-auto flex items-center gap-0.5">
         <Button
@@ -84,11 +71,11 @@ export function TopNavbar({
           return (
             <Button
               key={v.key}
-              variant={currentWorkspaceView === v.key ? 'secondary' : 'ghost'}
+              variant={currentWorkspace === v.key ? 'secondary' : 'ghost'}
               size="icon"
               className="h-8 w-8"
               title={v.label}
-              onClick={() => onSelectWorkspaceView(v.key)}
+              onClick={() => onOpenWorkspace(v.key)}
             >
               <Icon className="h-4 w-4" />
             </Button>
@@ -104,7 +91,7 @@ export function TopNavbar({
             <DropdownMenuLabel>Workspace</DropdownMenuLabel>
             <DropdownMenuSeparator />
             {WORKSPACE_VIEWS.map(v => (
-              <DropdownMenuItem key={v.key} onSelect={() => onSelectWorkspaceView(v.key)}>
+              <DropdownMenuItem key={v.key} onSelect={() => onOpenWorkspace(v.key)}>
                 {v.label}
               </DropdownMenuItem>
             ))}

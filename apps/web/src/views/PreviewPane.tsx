@@ -3,9 +3,15 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import rehypeSanitize from 'rehype-sanitize'
 import rehypeHighlight from 'rehype-highlight'
-import { classifyCanonical, type DocType } from '@richprompt/core'
-import { Badge } from '@/components/ui/badge'
+import { classifyCanonical, type CanonicalSection, type DocType } from '@richprompt/core'
 import 'highlight.js/styles/github-dark.css'
+
+const CANONICAL_STYLE: Record<CanonicalSection, string> = {
+  role: 'border-sky-500/50 text-sky-600 dark:text-sky-400 bg-sky-500/10',
+  task: 'border-emerald-500/50 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10',
+  output: 'border-violet-500/50 text-violet-600 dark:text-violet-400 bg-violet-500/10',
+  constraints: 'border-amber-500/50 text-amber-600 dark:text-amber-400 bg-amber-500/10',
+}
 
 function extractHeadingText(children: React.ReactNode): string {
   if (typeof children === 'string') return children
@@ -22,9 +28,11 @@ function renderHeading(Tag: 'h1' | 'h2' | 'h3' | 'h4', props: { children?: React
   return (
     <Tag className="flex items-center gap-2">
       {canonical && (
-        <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+        <span
+          className={`inline-flex items-center rounded-md border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide ${CANONICAL_STYLE[canonical]}`}
+        >
           {canonical}
-        </Badge>
+        </span>
       )}
       <span>{props.children}</span>
     </Tag>
@@ -118,35 +126,25 @@ export const PreviewPane = forwardRef<HTMLDivElement, Props>(function PreviewPan
   { source, docType, onScroll },
   scrollRef,
 ) {
-  const label =
-    docType === 'tool'
-      ? 'tool card (as model sees it)'
-      : `rendered ${docType === 'skill' ? 'SKILL.md' : 'prompt'}`
-
   return (
-    <div className="flex h-full min-h-0 flex-col border-l border-border bg-background">
-      <div className="flex h-8 shrink-0 items-center px-3 text-[10px] uppercase tracking-wider text-muted-foreground">
-        {label}
-      </div>
-      <div
-        ref={scrollRef}
-        onScroll={onScroll}
-        className="min-h-0 flex-1 overflow-auto"
-      >
-        {docType === 'tool' ? (
-          <ToolPreview source={source} />
-        ) : (
-          <div className="prose prose-sm dark:prose-invert max-w-none p-4 prose-pre:bg-muted prose-code:before:hidden prose-code:after:hidden">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeSanitize, rehypeHighlight]}
-              components={MD_COMPONENTS}
-            >
-              {source}
-            </ReactMarkdown>
-          </div>
-        )}
-      </div>
+    <div
+      ref={scrollRef}
+      onScroll={onScroll}
+      className="h-full min-h-0 overflow-auto"
+    >
+      {docType === 'tool' ? (
+        <ToolPreview source={source} />
+      ) : (
+        <div className="prose prose-sm dark:prose-invert max-w-none p-4 prose-pre:bg-muted prose-code:before:hidden prose-code:after:hidden">
+          <ReactMarkdown
+            remarkPlugins={[remarkGfm]}
+            rehypePlugins={[rehypeSanitize, rehypeHighlight]}
+            components={MD_COMPONENTS}
+          >
+            {source}
+          </ReactMarkdown>
+        </div>
+      )}
     </div>
   )
 })

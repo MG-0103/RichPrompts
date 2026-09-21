@@ -28,16 +28,18 @@ import { TooltipProvider } from './components/ui/tooltip'
 import { AppShell } from './shell/AppShell'
 import { useNavigation } from './shell/useNavigation'
 import { useTheme } from './shell/useTheme'
-import { viewLabel } from './shell/views'
+import { rightPaneLabel, workspaceLabel } from './shell/views'
 import type { Crumb } from './shell/Breadcrumbs'
-import { Placeholder } from './views/Placeholder'
-import { EditorView, type EditorController } from './views/EditorView'
+import { EditorPane, type EditorController } from './views/EditorPane'
+import { Workbench } from './views/Workbench'
+import { PreviewPane } from './views/PreviewPane'
 import { StructureView } from './views/StructureView'
-import { TestsView } from './views/TestsView'
 import { HistoryView } from './views/HistoryView'
 import { LLMReviewView } from './views/LLMReviewView'
+import { TestsView } from './views/TestsView'
 import { RegistryView } from './views/RegistryView'
 import { SettingsView } from './views/SettingsView'
+import { Placeholder } from './views/Placeholder'
 
 const FIXTURES: Record<DocType, string> = {
   prompt: badPrompt,
@@ -65,8 +67,10 @@ function App() {
     [source, nav.docType],
   )
   const editorRef = useRef<EditorController | null>(null)
+  const previewScrollRef = useRef<HTMLDivElement | null>(null)
+  const syncingRef = useRef<'editor' | 'preview' | null>(null)
 
-  // Structure + semantic duplication (only meaningful for prompt/skill)
+  // Structure + semantic duplication
   const [runnerConfig, setRunnerConfig] = useState(() => loadTestingConfig())
   const updateRunnerConfig = (c: typeof runnerConfig) => {
     setRunnerConfig(c)
@@ -79,6 +83,38 @@ function App() {
     setUseMock(v)
     try { localStorage.setItem('richprompt.tests.mock', v ? '1' : '0') } catch { /* ignore */ }
   }
+  const structure = useStructure(source, nav.docType, runnerConfig.model)
+  const structureReport = structure.report
+  const structureHash = useMemo(
+    () => `${nav.docType}:${hashContent(source)}`,
+    [nav.docType, source],
+  )
+  const tests = useTests()
+  const llm = useLLMReview()
+  const registry = useRegistry()
+  const verifierReady =
+    tests.sidecar.state === 'up' ? Boolean(tests.sidecar.verifier?.available) : false
+  const openaiReady =
+    tests.sidecar.state === 'up' ? Boolean(tests.sidecar.openai?.available) : false
+  const openaiReason =
+    tests.sidecar.state === 'up' ? tests.sidecar.openai?.reason ?? null : 'sidecar offline'
+  const registryNames = useMemo(() => {
+    const targetsInline = callTargets(sampleRegistryTools, sampleRegistrySkills)
+    return {
+      toolNames: targetsInline.filter(t => t.kind === 'tool').map(t => t.name),
+      skillNames: targetsInline.filter(t => t.kind === 'skill').map(t => t.name),
+    }
+  }, [])
+  const semantic = useSemanticDuplication(
+    structureReport?.paragraphs ?? [],
+    structureHash,
+    {
+      verifierAvailable: verifierReady,
+      toolNames: registryNames.toolNames,
+      skillNames: registryNames.skillNames,
+    },
+  )
+
   const targets = useMemo(
     () => callTargets(sampleRegistryTools, sampleRegistrySkills),
     [],
@@ -120,44 +156,13 @@ function App() {
         const label = window.prompt(`Label for this commit of "${nav.docType}"?`, '')
         if (label && label.trim()) {
           versioning.commit(nav.docType, label)
-          nav.selectDocView('history')
+          nav.changeRightPane('history')
         }
       }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [nav.docType, versioning, nav])
-  const structure = useStructure(source, nav.docType, runnerConfig.model)
-  const structureReport = structure.report
-  const structureHash = useMemo(
-    () => `${nav.docType}:${hashContent(source)}`,
-    [nav.docType, source],
-  )
-  const tests = useTests()
-  const llm = useLLMReview()
-  const registry = useRegistry()
-  const verifierReady =
-    tests.sidecar.state === 'up' ? Boolean(tests.sidecar.verifier?.available) : false
-  const openaiReady =
-    tests.sidecar.state === 'up' ? Boolean(tests.sidecar.openai?.available) : false
-  const openaiReason =
-    tests.sidecar.state === 'up' ? tests.sidecar.openai?.reason ?? null : 'sidecar offline'
-  const registryNames = useMemo(() => {
-    const targetsInline = callTargets(sampleRegistryTools, sampleRegistrySkills)
-    return {
-      toolNames: targetsInline.filter(t => t.kind === 'tool').map(t => t.name),
-      skillNames: targetsInline.filter(t => t.kind === 'skill').map(t => t.name),
-    }
-  }, [])
-  const semantic = useSemanticDuplication(
-    structureReport?.paragraphs ?? [],
-    structureHash,
-    {
-      verifierAvailable: verifierReady,
-      toolNames: registryNames.toolNames,
-      skillNames: registryNames.skillNames,
-    },
-  )
 
   const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissals(structureHash))
   useEffect(() => { setDismissed(loadDismissals(structureHash)) }, [structureHash])
@@ -167,16 +172,12 @@ function App() {
   const onEditorChange = (next: string) => {
     setSources(s => ({ ...s, [nav.docType]: next }))
   }
-  const onJumpDiagnostic = (d: Diagnostic) => {
-    if (nav.active.scope !== 'doc' || nav.active.view !== 'editor') {
-      nav.selectDocView('editor')
-    }
+  const jumpToDiagnostic = (d: Diagnostic) => {
+    nav.openWorkbench()
     requestAnimationFrame(() => editorRef.current?.jumpTo(d))
   }
-  const onJumpOffset = (offset: number) => {
-    if (nav.active.scope !== 'doc' || nav.active.view !== 'editor') {
-      nav.selectDocView('editor')
-    }
+  const jumpToOffset = (offset: number) => {
+    nav.openWorkbench()
     requestAnimationFrame(() => {
       editorRef.current?.jumpTo({
         ruleId: '',
@@ -187,81 +188,128 @@ function App() {
     })
   }
 
-  const crumbs: Crumb[] = (() => {
-    if (nav.active.scope === 'doc') {
-      return [
-        { label: DOC_LABEL[nav.active.docType] },
-        { label: viewLabel(nav.active.view) },
-      ]
+  // Sync scroll editor ↔ preview (only when the preview tab is showing).
+  useEffect(() => {
+    if (nav.rightPane !== 'preview') return
+    const ctrl = editorRef.current
+    if (!ctrl) return
+    const off = ctrl.onScroll(() => {
+      if (syncingRef.current === 'preview') return
+      const preview = previewScrollRef.current
+      if (!preview) return
+      const pct = ctrl.getScrollPct()
+      const pmax = preview.scrollHeight - preview.clientHeight
+      if (pmax <= 0) return
+      syncingRef.current = 'editor'
+      preview.scrollTop = pct * pmax
+      requestAnimationFrame(() => { syncingRef.current = null })
+    })
+    return off
+  }, [nav.rightPane])
+
+  const onPreviewScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    if (syncingRef.current === 'editor') return
+    const ctrl = editorRef.current
+    if (!ctrl) return
+    const el = e.currentTarget
+    const pmax = el.scrollHeight - el.clientHeight
+    if (pmax <= 0) return
+    const pct = el.scrollTop / pmax
+    syncingRef.current = 'preview'
+    ctrl.setScrollPct(pct)
+    requestAnimationFrame(() => { syncingRef.current = null })
+  }
+
+  const crumbs: Crumb[] = nav.active.scope === 'workspace'
+    ? [{ label: 'Workspace' }, { label: workspaceLabel(nav.active.view) }]
+    : [{ label: DOC_LABEL[nav.docType] }, { label: rightPaneLabel(nav.rightPane) }]
+
+  const rightContent = (() => {
+    switch (nav.rightPane) {
+      case 'preview':
+        return (
+          <PreviewPane
+            ref={previewScrollRef}
+            source={source}
+            docType={nav.docType}
+            onScroll={onPreviewScroll}
+          />
+        )
+      case 'structure':
+        if (!structureReport) {
+          return <Placeholder title="Structure" note={structure.loading ? 'Analyzing…' : 'No structure report yet.'} />
+        }
+        return (
+          <StructureView
+            report={structureReport}
+            onJump={jumpToOffset}
+            dismissed={dismissed}
+            onToggleDismiss={onToggleDismiss}
+            onClearDismissals={onClearDismissals}
+            liveChars={source.length}
+            loading={structure.loading}
+            stale={structure.stale}
+            manualMode={structure.manualMode}
+            lastDurationMs={structure.lastDurationMs}
+            onReanalyze={structure.reanalyze}
+            semantic={semantic}
+            onActivateSemantic={semantic.activate}
+            onDeactivateSemantic={semantic.deactivate}
+            openaiReady={openaiReady}
+            openaiReason={openaiReason}
+          />
+        )
+      case 'history':
+        return (
+          <HistoryView
+            docType={nav.docType}
+            currentContent={source}
+            versions={versioning.versions[nav.docType] ?? []}
+            onCommit={label => versioning.commit(nav.docType, label)}
+            onRename={(id, label) => versioning.rename(nav.docType, id, label)}
+            onDelete={id => versioning.remove(nav.docType, id)}
+            onRestore={restoreVersion}
+          />
+        )
+      case 'review':
+        return (
+          <LLMReviewView
+            apiKey={llm.apiKey}
+            setApiKey={llm.setApiKey}
+            loading={llm.loading}
+            output={llm.output}
+            error={llm.error}
+            onReview={() => llm.review(nav.docType, source, diagnostics)}
+          />
+        )
     }
-    return [{ label: 'Workspace' }, { label: viewLabel(nav.active.view) }]
   })()
 
-  const view = (() => {
-    if (nav.active.scope === 'doc') {
-      switch (nav.active.view) {
-        case 'editor':
-          return (
-            <EditorView
-              ref={editorRef}
-              source={source}
-              docType={nav.docType}
-              onDocTypeChange={nav.changeDocType}
-              diagnostics={diagnostics}
-              sections={sections}
-              onChange={onEditorChange}
-              theme={theme}
-            />
-          )
-        case 'structure':
-          if (!structureReport) {
-            return <Placeholder title="Structure" note={structure.loading ? 'Analyzing…' : 'No structure report yet.'} />
-          }
-          return (
-            <StructureView
-              report={structureReport}
-              onJump={onJumpOffset}
-              dismissed={dismissed}
-              onToggleDismiss={onToggleDismiss}
-              onClearDismissals={onClearDismissals}
-              liveChars={source.length}
-              loading={structure.loading}
-              stale={structure.stale}
-              manualMode={structure.manualMode}
-              lastDurationMs={structure.lastDurationMs}
-              onReanalyze={structure.reanalyze}
-              semantic={semantic}
-              onActivateSemantic={semantic.activate}
-              onDeactivateSemantic={semantic.deactivate}
-              openaiReady={openaiReady}
-              openaiReason={openaiReason}
-            />
-          )
-        case 'history':
-          return (
-            <HistoryView
-              docType={nav.docType}
-              currentContent={source}
-              versions={versioning.versions[nav.docType] ?? []}
-              onCommit={label => versioning.commit(nav.docType, label)}
-              onRename={(id, label) => versioning.rename(nav.docType, id, label)}
-              onDelete={id => versioning.remove(nav.docType, id)}
-              onRestore={restoreVersion}
-            />
-          )
-        case 'review':
-          return (
-            <LLMReviewView
-              apiKey={llm.apiKey}
-              setApiKey={llm.setApiKey}
-              loading={llm.loading}
-              output={llm.output}
-              error={llm.error}
-              onReview={() => llm.review(nav.docType, source, diagnostics)}
-            />
-          )
+  const workbench = (
+    <Workbench
+      editor={
+        <EditorPane
+          ref={editorRef}
+          source={source}
+          docType={nav.docType}
+          onDocTypeChange={nav.changeDocType}
+          diagnostics={diagnostics}
+          sections={sections}
+          onChange={onEditorChange}
+          theme={theme}
+        />
       }
-    }
+      rightPane={nav.rightPane}
+      onRightPaneChange={nav.changeRightPane}
+      rightContent={rightContent}
+      badges={{
+        structure: structureReport?.duplicationClusters.length,
+      }}
+    />
+  )
+
+  const mainView = (() => {
+    if (nav.active.scope === 'workbench') return workbench
     switch (nav.active.view) {
       case 'tests':
         return (
@@ -320,18 +368,18 @@ function App() {
     <TooltipProvider delayDuration={200}>
       <AppShell
         active={nav.active}
-        onSelectDocView={nav.selectDocView}
-        onSelectWorkspaceView={nav.selectWorkspaceView}
+        onOpenWorkbench={nav.openWorkbench}
+        onOpenWorkspace={nav.openWorkspace}
         crumbs={crumbs}
         canGoBack={nav.canGoBack}
         onBack={nav.back}
         diagnostics={diagnostics}
         sections={sections}
-        onJumpDiagnostic={onJumpDiagnostic}
+        onJumpDiagnostic={jumpToDiagnostic}
         theme={theme}
         onToggleTheme={toggleTheme}
       >
-        {view}
+        {mainView}
       </AppShell>
     </TooltipProvider>
   )
