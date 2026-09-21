@@ -1,4 +1,11 @@
 export * from './types'
+export {
+  applyDiagnosticFix,
+  isDiagnosticFixable,
+  fixUndefinedVariable,
+  fixMissingSections,
+} from './autofix'
+export type { UndefinedVariableData, MissingSectionsData } from './autofix'
 export { defaultConfig } from './config'
 export { parseDocument, classifyCanonical, inferBodyCanonicals } from './parser'
 export { parseToolDocument } from './toolParser'

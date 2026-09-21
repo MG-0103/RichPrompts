@@ -37,6 +37,9 @@ export interface Diagnostic {
   docsRef?: string
   fix?: string
   relatedInfo?: RelatedInfo[]
+  /** Machine-readable payload for autofix and other tooling. Free-form
+   *  per rule — see the rule's fix implementation for the schema. */
+  data?: Record<string, unknown>
 }
 
 export interface RuleContext {

@@ -31,6 +31,7 @@ const missingSections: Rule = {
         message: `Missing recommended sections: ${missing.join(', ')}. Add headings or <${missing[0]}> tags.`,
         range: { startOffset: 0, endOffset: Math.min(doc.raw.length, 1) },
         docsRef: 'docs/06-anti-patterns.md § 1 (Vague prompts)',
+        data: { kind: 'missing-sections', missing },
       },
     ]
   },
@@ -58,6 +59,7 @@ const undefinedVariable: Rule = {
         message: `Template variable {{${name}}} is not declared in frontmatter.`,
         range: { startOffset: m.index, endOffset: m.index + m[0].length },
         fix: `Declare ${name} under 'variables:' in frontmatter.`,
+        data: { kind: 'undefined-variable', name },
       })
     }
     return out

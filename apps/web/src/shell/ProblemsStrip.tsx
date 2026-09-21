@@ -7,11 +7,12 @@ import {
   ChevronRight,
   XCircle,
 } from 'lucide-react'
-import type {
-  CanonicalSection,
-  Diagnostic,
-  Section,
-  Severity,
+import {
+  isDiagnosticFixable,
+  type CanonicalSection,
+  type Diagnostic,
+  type Section,
+  type Severity,
 } from '@richprompt/core'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -24,6 +25,7 @@ interface Props {
   /** Fires when the user hovers or leaves a diagnostic row. Used by the
    *  Preview pane to highlight the span in the rendered output. */
   onHoverDiagnostic?: (d: Diagnostic | null) => void
+  onFixDiagnostic?: (d: Diagnostic) => void
 }
 
 type GroupMode = 'severity' | 'rule' | 'section'
@@ -41,7 +43,13 @@ const SEV_META: Record<
 const SEVERITY_ORDER: Severity[] = ['error', 'warn', 'info']
 const SECTION_ORDER: SectionBucket[] = ['role', 'task', 'output', 'constraints', 'other']
 
-export function ProblemsStrip({ diagnostics, sections, onJump, onHoverDiagnostic }: Props) {
+export function ProblemsStrip({
+  diagnostics,
+  sections,
+  onJump,
+  onHoverDiagnostic,
+  onFixDiagnostic,
+}: Props) {
   const [expanded, setExpanded] = useState(false)
   const [mode, setMode] = useState<GroupMode>('severity')
   const [muted, setMuted] = useState<Set<Severity>>(new Set())
@@ -230,6 +238,17 @@ export function ProblemsStrip({ diagnostics, sections, onJump, onHoverDiagnostic
                                 )}
                                 <span>{d.message}</span>
                               </div>
+                              {onFixDiagnostic && isDiagnosticFixable(d) && (
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="h-5 shrink-0 px-1.5 text-[10px]"
+                                  onClick={() => onFixDiagnostic(d)}
+                                  title={d.fix}
+                                >
+                                  Fix
+                                </Button>
+                              )}
                               {onJump && (
                                 <Button
                                   size="sm"

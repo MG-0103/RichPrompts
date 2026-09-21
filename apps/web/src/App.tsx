@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import {
+  applyDiagnosticFix,
   applyNoiseFix,
   badPrompt,
   badTool,
@@ -237,6 +238,9 @@ function App() {
   const onFixNoise = (flag: NoiseFlag) => {
     setSources(s => ({ ...s, [nav.docType]: applyNoiseFix(s[nav.docType], flag) }))
   }
+  const onFixDiagnostic = (d: Diagnostic) => {
+    setSources(s => ({ ...s, [nav.docType]: applyDiagnosticFix(s[nav.docType], d) }))
+  }
   const jumpToDiagnostic = (d: Diagnostic) => {
     nav.openWorkbench()
     requestAnimationFrame(() => editorRef.current?.jumpTo(d))
@@ -447,6 +451,7 @@ function App() {
         sections={sections}
         onJumpDiagnostic={jumpToDiagnostic}
         onHoverDiagnostic={setHoveredDiag}
+        onFixDiagnostic={onFixDiagnostic}
         theme={theme}
         onToggleTheme={toggleTheme}
       >
