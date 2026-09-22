@@ -215,6 +215,79 @@
       ]
     },
 
+    "short-skeleton": {
+      "file": "prompts/short-skeleton.md",
+      "source": "synthesized",
+      "notes": "Minimum-viable prompt: one sentence, role + task + output implicit in prose. Stresses body inference — no headings to fall back on, but the sentence is short and structured. Tests the pipeline's floor.",
+      "sections": [
+        { "anchor": "You are a haiku writer.", "label": "role" }
+      ],
+      "duplicates": [],
+      "contradictions": [],
+      "relatedNotDuplicate": []
+    },
+
+    "role-play-detective": {
+      "file": "prompts/role-play-detective.md",
+      "source": "community",
+      "notes": "Character role-play prompt. Distinct sections for Character, Setting, Style, and Task. Style is separate from Character (persona) — tests whether the classifier picks the right label per heading. Also uses 'Character' as a synonym for role/persona, which the current regex doesn't recognize (a known miss).",
+      "sections": [
+        { "anchor": "# Character\n\nYou are Detective", "until": "# Setting", "label": "persona" },
+        { "anchor": "# Setting\n\nThe year is 1978.", "until": "# Style", "label": "context" },
+        { "anchor": "# Style\n\nSpeak in short sentences.", "until": "# Task", "label": "style" },
+        { "anchor": "# Task\n\nInvestigate the case", "until": "# Constraints", "label": "task" },
+        { "anchor": "# Constraints\n\n- Do not reveal", "until": "# Safety", "label": "constraints" },
+        { "anchor": "# Safety\n\nIf the user asks anything", "label": "guardrails" }
+      ],
+      "duplicates": [],
+      "contradictions": [],
+      "relatedNotDuplicate": []
+    },
+
+    "json-structured-output": {
+      "file": "prompts/json-structured-output.md",
+      "source": "community",
+      "notes": "Structured-output prompt. Contains a fenced JSON schema block inside the Output Schema section. Tests classifier robustness to code fences and multi-line structured content within a section.",
+      "sections": [
+        { "anchor": "# Role\n\nYou are a resume parser.", "until": "# Task", "label": "role" },
+        { "anchor": "# Task\n\nGiven a resume", "until": "# Output Schema", "label": "task" },
+        { "anchor": "# Output Schema\n\n```json", "until": "# Constraints", "label": "output" },
+        { "anchor": "# Constraints\n\n- Return JSON only.", "until": "# Input", "label": "constraints" },
+        { "anchor": "# Input\n\nThe resume is passed", "label": "input" }
+      ],
+      "duplicates": [],
+      "contradictions": [],
+      "relatedNotDuplicate": []
+    },
+
+    "multi-agent-orchestrator": {
+      "file": "prompts/multi-agent-orchestrator.md",
+      "source": "community",
+      "notes": "Three-agent orchestration prompt with distinct sub-agent definitions. Similar structure to two-agent-defs but with an explicit Workflow section. Agent definitions here are more clearly distinct in wording (different verbs, different i/o shapes) — a correct pipeline should NOT flag them as duplicates. Includes Safety section for guardrails.",
+      "sections": [
+        { "anchor": "# Role\n\nYou are an orchestrator", "until": "# Agents", "label": "role" },
+        { "anchor": "# Agents\n\n## Researcher", "until": "## Researcher", "label": "agents" },
+        { "anchor": "## Researcher\n\nThe researcher agent", "until": "## Synthesizer", "label": "agents" },
+        { "anchor": "## Synthesizer\n\nThe synthesizer agent", "until": "## Fact-checker", "label": "agents" },
+        { "anchor": "## Fact-checker\n\nThe fact-checker agent", "until": "# Workflow", "label": "agents" },
+        { "anchor": "# Workflow\n\n1. Read the user's question.", "until": "# Constraints", "label": "task" },
+        { "anchor": "# Constraints\n\n- Follow the workflow", "until": "# Output", "label": "constraints" },
+        { "anchor": "# Output\n\nReturn the final", "until": "# Safety", "label": "output" },
+        { "anchor": "# Safety\n\nRefuse research on:", "label": "guardrails" }
+      ],
+      "duplicates": [],
+      "contradictions": [],
+      "relatedNotDuplicate": [
+        {
+          "texts": [
+            "The researcher agent finds and reads relevant sources.",
+            "The synthesizer agent takes multiple source excerpts and produces a coherent summary."
+          ],
+          "note": "Two distinct agents. Different verbs, different inputs, different outputs. Must NOT cluster as duplicate."
+        }
+      ]
+    },
+
     "unheaded-wall": {
       "file": "prompts/unheaded-wall.md",
       "source": "synthesized",
