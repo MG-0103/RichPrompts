@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "prompts": {
+    "fixture-good-prompt": {
+      "file": "prompts/fixture-good-prompt.md",
+      "source": "internal",
+      "notes": "Existing goodPrompt fixture. Well-headed structure — trivial for section detection, a baseline for false positives on the harder findings.",
+      "sections": [
+        { "anchor": "---\nvariables:", "until": "---\n\n# Role", "label": "input" },
+        { "anchor": "# Role\nSenior technical writer", "until": "# Task", "label": "role" },
+        { "anchor": "# Task\nProduce a two-paragraph brief", "until": "# Output", "label": "task" },
+        { "anchor": "# Output\nPlain prose", "until": "# Constraints", "label": "output" },
+        { "anchor": "# Constraints\nCite section numbers", "until": "<input>", "label": "constraints" },
+        { "anchor": "<input>{{user_query}}</input>", "label": "input" }
+      ],
+      "duplicates": [],
+      "contradictions": [],
+      "relatedNotDuplicate": []
+    },
+
+    "two-agent-defs": {
+      "file": "prompts/two-agent-defs.md",
+      "source": "bug-case",
+      "notes": "Reconstruction of the failure mode: two distinct agent definitions clustered by v1 as duplicates because they share the 'agent' vocabulary. Regression fence — every pipeline MUST label this as related-not-duplicate.",
+      "sections": [
+        { "anchor": "# Role\n\nYou orchestrate", "until": "# Agents", "label": "role" },
+        { "anchor": "# Agents\n\n## Code Review Agent", "until": "## Refactor Agent", "label": "agents" },
+        { "anchor": "## Refactor Agent\n\nThe refactor agent", "until": "# Constraints", "label": "agents" },
+        { "anchor": "# Constraints\n\n- Never invoke", "until": "# Output", "label": "constraints" },
+        { "anchor": "# Output\n\nReturn a JSON object", "label": "output" }
+      ],
+      "duplicates": [],
+      "contradictions": [],
+      "relatedNotDuplicate": [
+        {
+          "texts": [
+            "The code review agent is an experienced senior engineer that reviews pull requests.",
+            "The refactor agent is an experienced senior engineer that proposes structural improvements to code."
+          ],
+          "note": "Two distinct agent definitions. Share 'experienced senior engineer' phrasing but describe different agents with different scopes."
+        }
+      ]
+    },
+
+    "unheaded-wall": {
+      "file": "prompts/unheaded-wall.md",
+      "source": "synthesized",
+      "notes": "Wall-of-text prompt with no headings — stresses semantic chunking. Contains explicit duplicates ('Always be polite' / 'Please always be polite' / 'Be concise' + 'Always be polite'), demonstrates unheaded canonical sections (role, task, constraints, output all present but unlabelled).",
+      "sections": [
+        {
+          "anchor": "You are a friendly customer support assistant",
+          "until": "Your job is to answer",
+          "label": "role"
+        },
+        {
+          "anchor": "Your job is to answer questions",
+          "until": "Always be polite,",
+          "label": "task"
+        },
+        {
+          "anchor": "Always be polite, concise, and factual.",
+          "until": "Return answers in plain prose",
+          "label": "constraints"
+        },
+        {
+          "anchor": "Return answers in plain prose",
+          "until": "Do not use emojis.",
+          "label": "output"
+        },
+        {
+          "anchor": "Do not use emojis.",
+          "label": "constraints"
+        }
+      ],
+      "duplicates": [
+        {
+          "texts": [
+            "Always be polite, concise, and factual.",
+            "Please always be polite."
+          ],
+          "note": "'Please always be polite' restates the politeness constraint from earlier."
+        },
+        {
+          "texts": [
+            "Always be polite, concise, and factual.",
+            "Be concise."
+          ],
+          "note": "'Be concise' restates a fragment of the first constraint sentence."
+        }
+      ],
+      "contradictions": [],
+      "relatedNotDuplicate": []
+    }
+  }
+}

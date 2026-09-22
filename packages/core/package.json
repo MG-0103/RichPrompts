@@ -10,9 +10,11 @@
   },
   "scripts": {
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "eval:v1": "tsx scripts/eval-v1.ts"
   },
   "devDependencies": {
+    "tsx": "^4.19.0",
     "typescript": "^7.0.2",
     "vitest": "^2.1.0"
   },
