@@ -11,7 +11,8 @@
   "scripts": {
     "test": "vitest run",
     "test:watch": "vitest",
-    "eval:v1": "tsx scripts/eval-v1.ts"
+    "eval:v1": "tsx scripts/eval-v1.ts",
+    "eval:v2-segment": "tsx scripts/eval-v2-segment.ts"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

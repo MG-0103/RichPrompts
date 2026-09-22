@@ -183,3 +183,34 @@ class MergeClusterResponse(BaseModel):
     # `reason` names the distinct entities.
     refused: bool = False
 
+
+class SegmentRequest(BaseModel):
+    source: str
+    # Regex Layer 1's boundaries (section-start offsets). The chunker
+    # only proposes boundaries in gaps between these.
+    knownBoundaries: list[int] = []
+    threshold: float | None = None
+    minGapChars: int | None = None
+    model: str | None = None
+
+
+class SegmentPairSimilarity(BaseModel):
+    gap: int
+    leftRange: list[int]
+    rightRange: list[int]
+    similarity: float
+
+
+class SegmentDebugPayload(BaseModel):
+    sentenceOffsets: list[list[int]]
+    pairSimilarities: list[SegmentPairSimilarity]
+    gapRegions: list[list[int]]
+
+
+class SegmentResponse(BaseModel):
+    boundaries: list[int]
+    thresholdUsed: float
+    model: str
+    durationMs: float
+    debug: SegmentDebugPayload
+

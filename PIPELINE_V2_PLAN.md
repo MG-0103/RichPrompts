@@ -62,6 +62,11 @@ below 80% we're introducing more noise than signal.
 
 **Effort:** ~1 day.
 
+**Status (2026-09-22):** Endpoint + segmenter shipped. Unit tests pass
+(16/16) with mocked embeddings. Live corpus gate needs a running
+sidecar with `OPENAI_API_KEY`; run `npm --workspace packages/core run
+eval:v2-segment` against a live sidecar and record the result here.
+
 ---
 
 ## Phase 2 — Hierarchical NLI section classifier

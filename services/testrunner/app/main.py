@@ -49,6 +49,11 @@ from .merge import (
     merge_cluster,
     is_available as merge_available,
 )
+from .segment import (
+    DEFAULT_THRESHOLD as SEGMENT_DEFAULT_THRESHOLD,
+    DEFAULT_MIN_GAP_CHARS as SEGMENT_DEFAULT_MIN_GAP,
+    segment as segment_source,
+)
 from .mock_runner import run_mock
 from .real_runner import is_available as real_available, run_real
 from .schemas import (
@@ -56,6 +61,10 @@ from .schemas import (
     ClassifySectionsResponse,
     MergeClusterRequest,
     MergeClusterResponse,
+    SegmentDebugPayload,
+    SegmentPairSimilarity,
+    SegmentRequest,
+    SegmentResponse,
     EmbedRequest,
     EmbedResponse,
     ExtractionVerdict,
@@ -323,6 +332,55 @@ async def merge_cluster_endpoint(req: MergeClusterRequest) -> MergeClusterRespon
         model=req.model or DEFAULT_MERGE_MODEL,
         durationMs=duration,
         refused=bool(result.get("refused", False)),
+    )
+
+
+@app.post("/v2/segment", response_model=SegmentResponse)
+async def v2_segment(req: SegmentRequest) -> SegmentResponse:
+    """v2 Phase 1 — semantic chunking of unheaded regions."""
+    if not req.source.strip():
+        return SegmentResponse(
+            boundaries=[],
+            thresholdUsed=req.threshold or SEGMENT_DEFAULT_THRESHOLD,
+            model="",
+            durationMs=0.0,
+            debug=SegmentDebugPayload(sentenceOffsets=[], pairSimilarities=[], gapRegions=[]),
+        )
+    if len(req.source) > 200_000:
+        raise HTTPException(status_code=413, detail="source exceeds 200,000 chars")
+    ready, reason = embed_available()
+    if not ready:
+        raise HTTPException(status_code=503, detail=f"segment unavailable: {reason}")
+
+    started = time.perf_counter()
+    threshold = req.threshold if req.threshold is not None else SEGMENT_DEFAULT_THRESHOLD
+    min_gap = req.minGapChars if req.minGapChars is not None else SEGMENT_DEFAULT_MIN_GAP
+    boundaries, debug = await segment_source(
+        req.source,
+        req.knownBoundaries,
+        threshold=threshold,
+        min_gap_chars=min_gap,
+        model=req.model,
+    )
+    duration = (time.perf_counter() - started) * 1000
+    return SegmentResponse(
+        boundaries=boundaries,
+        thresholdUsed=threshold,
+        model=req.model or DEFAULT_EMBED_MODEL,
+        durationMs=duration,
+        debug=SegmentDebugPayload(
+            sentenceOffsets=[list(t) for t in debug.sentence_offsets],
+            pairSimilarities=[
+                SegmentPairSimilarity(
+                    gap=p["gap"],
+                    leftRange=list(p["left_range"]),
+                    rightRange=list(p["right_range"]),
+                    similarity=p["similarity"],
+                )
+                for p in debug.pair_similarities
+            ],
+            gapRegions=[list(t) for t in debug.gap_regions],
+        ),
     )
 
 
