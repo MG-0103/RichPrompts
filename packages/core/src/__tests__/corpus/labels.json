@@ -288,6 +288,72 @@
       ]
     },
 
+    "legal-contract-analyst": {
+      "file": "prompts/legal-contract-analyst.md",
+      "source": "domain",
+      "notes": "Legal-domain prompt. Heavy Guardrails ('NOT a licensed attorney', refuse-to-draft). Uses 'Output Format' as a compound heading — tests that the compound regex wins over bare 'Format'. Domain terminology should NOT confuse the classifier.",
+      "sections": [
+        { "anchor": "# Role\n\nYou are a legal analyst", "until": "# Task", "label": "role" },
+        { "anchor": "# Task\n\nGiven a contract excerpt", "until": "# Output Format", "label": "task" },
+        { "anchor": "# Output Format\n\nRespond with markdown", "until": "# Constraints", "label": "output" },
+        { "anchor": "# Constraints\n\n- Cite the clause number", "until": "# Guardrails", "label": "constraints" },
+        { "anchor": "# Guardrails\n\n- You are NOT a licensed attorney", "label": "guardrails" }
+      ],
+      "duplicates": [],
+      "contradictions": [],
+      "relatedNotDuplicate": []
+    },
+
+    "medical-qa-refuser": {
+      "file": "prompts/medical-qa-refuser.md",
+      "source": "domain",
+      "notes": "Medical-domain prompt with heavy refusal patterns. Uses 'Response Format' (compound) and 'Refusal / Safety' (unusual guardrails synonym). Tests classifier on multi-word section names.",
+      "sections": [
+        { "anchor": "# Role\n\nYou are a general health information", "until": "# Task", "label": "role" },
+        { "anchor": "# Task\n\nAnswer the user's question", "until": "# Response Format", "label": "task" },
+        { "anchor": "# Response Format\n\n- Lead with the direct answer", "until": "# Constraints", "label": "output" },
+        { "anchor": "# Constraints\n\n- Cite general references", "until": "# Refusal / Safety", "label": "constraints" },
+        { "anchor": "# Refusal / Safety\n\nRefuse to answer questions about:", "label": "guardrails" }
+      ],
+      "duplicates": [],
+      "contradictions": [],
+      "relatedNotDuplicate": []
+    },
+
+    "creative-writing-coach": {
+      "file": "prompts/creative-writing-coach.md",
+      "source": "domain",
+      "notes": "Creative-writing-domain prompt with distinct Persona + Voice sections. Voice is separate from Persona/Style — a subtle taxonomy call. Currently my regex maps 'voice' to style, which is a reasonable synonym mapping. Tests that.",
+      "sections": [
+        { "anchor": "# Persona\n\nYou are a fiction editor", "until": "# Voice", "label": "persona" },
+        { "anchor": "# Voice\n\nSpeak like someone who reads", "until": "# Task", "label": "style" },
+        { "anchor": "# Task\n\nThe writer shares an excerpt", "until": "# Output", "label": "task" },
+        { "anchor": "# Output\n\nRespond conversationally", "until": "# Constraints", "label": "output" },
+        { "anchor": "# Constraints\n\n- Do not rewrite the whole excerpt.", "label": "constraints" }
+      ],
+      "duplicates": [],
+      "contradictions": [],
+      "relatedNotDuplicate": []
+    },
+
+    "scientific-research-assistant": {
+      "file": "prompts/scientific-research-assistant.md",
+      "source": "domain",
+      "notes": "Scientific-research-domain prompt with distinct Role, Context, Task, Reasoning, Output, Constraints, Guardrails. Tests the fullest section set we have in the corpus. Reasoning is an explicit chain-of-thought section.",
+      "sections": [
+        { "anchor": "# Role\n\nYou are a research assistant", "until": "# Context", "label": "role" },
+        { "anchor": "# Context\n\nThe lab works on solid-state", "until": "# Task", "label": "context" },
+        { "anchor": "# Task\n\nAnswer questions grounded", "until": "# Reasoning", "label": "task" },
+        { "anchor": "# Reasoning\n\nBefore citing a source", "until": "# Output", "label": "reasoning" },
+        { "anchor": "# Output\n\nRespond in markdown.", "until": "# Constraints", "label": "output" },
+        { "anchor": "# Constraints\n\n- Never cite a paper", "until": "# Guardrails", "label": "constraints" },
+        { "anchor": "# Guardrails\n\n- Do not help with proposals", "label": "guardrails" }
+      ],
+      "duplicates": [],
+      "contradictions": [],
+      "relatedNotDuplicate": []
+    },
+
     "unheaded-wall": {
       "file": "prompts/unheaded-wall.md",
       "source": "synthesized",
