@@ -5,11 +5,50 @@ const HEADING_RE = /^(#{1,6})\s+(.+)$/gm
 const XML_OPEN_RE = /<([a-zA-Z][\w:-]*)\b[^>]*>/g
 const VAR_RE = /\{\{\s*([a-zA-Z_][\w.-]*)\s*\}\}/g
 
+/**
+ * Heading/XML-tag name → canonical section.
+ *
+ * Order matters — the first pattern that matches wins. Compound and
+ * multi-word patterns come first so specific labels (e.g.
+ * "output format" → output, "tool use rules" → constraints) beat
+ * bare-word singles that would otherwise steal the match.
+ */
 const CANONICAL_PATTERNS: Array<{ canonical: CanonicalSection; re: RegExp }> = [
-  { canonical: 'role',        re: /\b(role|persona|you are|identity)\b/i },
-  { canonical: 'task',        re: /\b(task|goal|objective|instructions?|job)\b/i },
-  { canonical: 'output',      re: /\b(output|format|response|response[- ]format|schema)\b/i },
-  { canonical: 'constraints', re: /\b(constraints?|rules?|requirements?|guidelines?|policies?|limitations?)\b/i },
+  // --- Compound / multi-word (specific first) ---
+  { canonical: 'constraints', re: /\b(tool[_ ]use[_ ]rules?|editing[_ ]conventions?|coding[_ ]conventions?|style[_ ]conventions?|communication[_ ]rules?|communication[_ ]guidelines?)\b/i },
+  { canonical: 'output',      re: /\b(output[_ ]format|response[_ ]format|output[_ ]schema|response[_ ]schema)\b/i },
+  { canonical: 'reasoning',   re: /\b(reasoning[_ ]approach|thinking[_ ]approach|chain[_ -]of[_ -]thought|thinking[_ ]style)\b/i },
+  { canonical: 'context',     re: /\b(context|background)\b/i },
+
+  // --- Role family ---
+  { canonical: 'persona',     re: /\b(persona|identity)\b/i },
+  { canonical: 'style',       re: /\b(style|voice|writing[_ ]style)\b/i },
+  { canonical: 'tone',        re: /\b(tone|register|mood)\b/i },
+  { canonical: 'role',        re: /\b(role|you[_ ]are)\b/i },
+
+  // --- Reasoning / examples ---
+  { canonical: 'reasoning',   re: /\b(reasoning|thinking|cot)\b/i },
+  { canonical: 'examples',    re: /\b(examples?|few[_ -]shots?|demonstrations?)\b/i },
+
+  // --- Guardrails (checked before constraints so 'safety' etc. map here) ---
+  { canonical: 'guardrails',  re: /\b(guardrails?|safety|refusals?|refuse|do[_ ]not[_ ]answer)\b/i },
+
+  // --- Task family ---
+  { canonical: 'task',        re: /\b(task|goal|objective|instructions?|job|workflow)\b/i },
+
+  // --- Definitions ---
+  { canonical: 'agents',      re: /\b(agents?|sub[_ -]?agents?|delegations?)\b/i },
+  { canonical: 'skills',      re: /\b(skills?)\b/i },
+  { canonical: 'tools',       re: /\b(tools?)\b/i },
+
+  // --- Input ---
+  { canonical: 'input',       re: /\b(input|user[_ ]input|data|content|query|documents?)\b/i },
+
+  // --- Constraints (broad singles last so specific labels win first) ---
+  { canonical: 'constraints', re: /\b(constraints?|rules?|requirements?|guidelines?|policies?|limitations?|restrictions?|communication|conventions?)\b/i },
+
+  // --- Output singles ---
+  { canonical: 'output',      re: /\b(output|response|schema|format)\b/i },
 ]
 
 export function classifyCanonical(name: string): CanonicalSection | undefined {
@@ -25,21 +64,56 @@ export function classifyCanonical(name: string): CanonicalSection | undefined {
  *  pattern requires a distinctive introductory phrase or a labelled
  *  list, so incidental prose doesn't false-positive. */
 const BODY_PATTERNS: Array<{ canonical: CanonicalSection; re: RegExp }> = [
+  // Role family
   {
     canonical: 'role',
-    re: /(?:^|\n)\s*(?:you\s+are\b|you'?re\s+(?:a|an|the)\b|act\s+as\b|your\s+persona\b|identity\s*[:.-])/i,
+    re: /(?:^|\n)\s*(?:you\s+are\b|you'?re\s+(?:a|an|the)\b|act\s+as\b)/i,
   },
+  {
+    canonical: 'persona',
+    re: /(?:^|\n)\s*(?:your\s+persona\b|persona\s*[:.-]|identity\s*[:.-])/i,
+  },
+  {
+    canonical: 'style',
+    re: /(?:^|\n)\s*(?:writing\s+style|style\s*[:.-]|voice\s*[:.-])/i,
+  },
+  {
+    canonical: 'tone',
+    re: /(?:^|\n)\s*(?:tone\s*[:.-]|register\s*[:.-])/i,
+  },
+
+  // Task / context
   {
     canonical: 'task',
-    re: /(?:^|\n)\s*(?:your\s+(?:task|job|goal|objective|primary\s+function|responsibility)\s+is\b|the\s+task\s+is\b|task\s*[:.-]|objective\s*[:.-]|goal\s*[:.-])/i,
+    re: /(?:^|\n)\s*(?:your\s+(?:task|job|goal|objective|primary\s+function|responsibility)\s+is\b|the\s+task\s+is\b|task\s*[:.-]|objective\s*[:.-]|goal\s*[:.-]|your\s+job\s*[:.-])/i,
   },
   {
-    canonical: 'output',
-    re: /(?:^|\n)\s*(?:output\s+format|response\s+format|return\s+(?:a|an|the)?\s*(?:json|xml|list|structured|markdown)|format\s*[:.-]|schema\s*[:.-])/i,
+    canonical: 'context',
+    re: /(?:^|\n)\s*(?:context\s*[:.-]|background\s*[:.-])/i,
   },
+
+  // Output / input
+  {
+    canonical: 'output',
+    re: /(?:^|\n)\s*(?:output\s+format|response\s+format|return\s+(?:a|an|the)?\s*(?:json|xml|list|structured|markdown)|respond\s+(?:in|with)|format\s*[:.-]|schema\s*[:.-])/i,
+  },
+  {
+    canonical: 'input',
+    re: /(?:^|\n)\s*(?:the\s+user\s+will\s+(?:provide|send|paste|share)|input\s*[:.-]|user\s+input\s*[:.-])/i,
+  },
+
+  // Constraints / reasoning / guardrails
   {
     canonical: 'constraints',
     re: /(?:^|\n)\s*(?:constraints?|rules?|requirements?|guidelines?|policies?|limitations?|restrictions?)\s*[:.\-]/i,
+  },
+  {
+    canonical: 'reasoning',
+    re: /(?:^|\n)\s*(?:reasoning\s+approach|think\s+step\s+by\s+step|chain[- ]of[- ]thought|before\s+(?:responding|answering).*(?:think|work)|reasoning\s*[:.-])/i,
+  },
+  {
+    canonical: 'guardrails',
+    re: /(?:^|\n)\s*(?:refuse\s+to\s+(?:help|answer)|do\s+not\s+answer|safety\s*[:.-]|guardrails?\s*[:.-])/i,
   },
 ]
 

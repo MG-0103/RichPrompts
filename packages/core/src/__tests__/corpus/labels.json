@@ -24,7 +24,8 @@
       "notes": "Reconstruction of the failure mode: two distinct agent definitions clustered by v1 as duplicates because they share the 'agent' vocabulary. Regression fence — every pipeline MUST label this as related-not-duplicate.",
       "sections": [
         { "anchor": "# Role\n\nYou orchestrate", "until": "# Agents", "label": "role" },
-        { "anchor": "# Agents\n\n## Code Review Agent", "until": "## Refactor Agent", "label": "agents" },
+        { "anchor": "# Agents\n\n## Code Review Agent", "until": "## Code Review Agent", "label": "agents" },
+        { "anchor": "## Code Review Agent\n\nThe code review agent", "until": "## Refactor Agent", "label": "agents" },
         { "anchor": "## Refactor Agent\n\nThe refactor agent", "until": "# Constraints", "label": "agents" },
         { "anchor": "# Constraints\n\n- Never invoke", "until": "# Output", "label": "constraints" },
         { "anchor": "# Output\n\nReturn a JSON object", "label": "output" }
@@ -51,7 +52,7 @@
         { "anchor": "<task>\nReview the code", "until": "<output_format>", "label": "task" },
         { "anchor": "<output_format>\nStructure your response", "until": "<constraints>", "label": "output" },
         { "anchor": "<constraints>\n- Never fabricate", "until": "<examples>", "label": "constraints" },
-        { "anchor": "<examples>\n<example>", "until": "<thinking>", "label": "reasoning" },
+        { "anchor": "<examples>\n<example>", "until": "<thinking>", "label": "examples" },
         { "anchor": "<thinking>\nBefore responding", "label": "reasoning" }
       ],
       "duplicates": [],
@@ -64,7 +65,7 @@
       "source": "synthesized",
       "notes": "OpenAI conventions: markdown headings, terse imperative instructions, safety block at the end, tool-use hints as inline bullets. Representative of ChatGPT-style system prompts.",
       "sections": [
-        { "anchor": "# Identity\n\nYou are a customer support", "until": "# Instructions", "label": "role" },
+        { "anchor": "# Identity\n\nYou are a customer support", "until": "# Instructions", "label": "persona" },
         { "anchor": "# Instructions\n\nAnswer questions", "until": "# Tone", "label": "task" },
         { "anchor": "# Tone\n\nBe concise.", "until": "# Output", "label": "tone" },
         { "anchor": "# Output\n\nRespond in plain text.", "until": "# Safety", "label": "output" },
@@ -80,7 +81,7 @@
       "source": "synthesized",
       "notes": "Gemini conventions: explicit reasoning-directive section, verbose step-by-step guidance, chain-of-thought made mandatory in output. INCLUDES A LATENT CONTRADICTION: 'Always be thorough in your reasoning' vs 'Be concise where you can' in the same block. Tests whether the pipeline catches subtle contradiction inside one section.",
       "sections": [
-        { "anchor": "# Persona\n\nYou are a senior data analyst", "until": "# Reasoning approach", "label": "role" },
+        { "anchor": "# Persona\n\nYou are a senior data analyst", "until": "# Reasoning approach", "label": "persona" },
         { "anchor": "# Reasoning approach\n\nBefore giving", "until": "# Task", "label": "reasoning" },
         { "anchor": "# Task\n\nGiven the description", "until": "# Response format", "label": "task" },
         { "anchor": "# Response format\n\nUse markdown", "until": "# Guardrails", "label": "output" },

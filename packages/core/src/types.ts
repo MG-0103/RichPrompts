@@ -1,7 +1,42 @@
 export type DocType = 'prompt' | 'tool' | 'skill'
 export type Severity = 'error' | 'warn' | 'info'
 export type SectionKind = 'heading' | 'xml' | 'frontmatter' | 'body'
-export type CanonicalSection = 'role' | 'task' | 'output' | 'constraints'
+/**
+ * Extended canonical taxonomy (v2 spike).
+ *
+ *  Role family     — role, persona, style, tone
+ *  Task family     — task, context
+ *  Output family   — output, input
+ *  Constraints     — constraints, reasoning, examples, guardrails
+ *  Definitions     — tools, skills, agents
+ *
+ * The v1 shipping UI only paints role/task/output/constraints;
+ * the newer labels resolve correctly through the parser and
+ * missing-sections rule but currently render without a colored
+ * gutter bar. UI extension is a separate follow-up.
+ */
+export type CanonicalSection =
+  | 'role' | 'persona' | 'style' | 'tone'
+  | 'task' | 'context'
+  | 'output' | 'input'
+  | 'constraints' | 'reasoning' | 'examples' | 'guardrails'
+  | 'tools' | 'skills' | 'agents'
+
+/**
+ * Which fine-grained canonicals satisfy each of the four v1
+ * "required" section slots. Used by the missing-sections rule so
+ * that `persona` fills the role slot, `guardrails` fills the
+ * constraints slot, etc.
+ */
+export const SECTION_FAMILY: Record<
+  'role' | 'task' | 'output' | 'constraints',
+  ReadonlyArray<CanonicalSection>
+> = {
+  role:        ['role', 'persona'],
+  task:        ['task', 'context'],
+  output:      ['output'],
+  constraints: ['constraints', 'guardrails'],
+} as const
 
 export interface Section {
   kind: SectionKind

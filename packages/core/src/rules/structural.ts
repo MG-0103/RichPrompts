@@ -1,7 +1,9 @@
 import type { CanonicalSection, Diagnostic, ParsedDoc, Rule } from '../types'
+import { SECTION_FAMILY } from '../types'
 import { classifyCanonical, inferBodyCanonicals } from '../parser'
 
-const REQUIRED_SECTIONS: CanonicalSection[] = ['role', 'task', 'output', 'constraints']
+const REQUIRED_SLOTS: Array<'role' | 'task' | 'output' | 'constraints'> =
+  ['role', 'task', 'output', 'constraints']
 
 const missingSections: Rule = {
   id: 'prompt/missing-sections',
@@ -10,10 +12,8 @@ const missingSections: Rule = {
   appliesTo: ['prompt'],
   docsRef: 'docs/06-anti-patterns.md § 1 (Vague prompts)',
   check(doc) {
-    // Consider a canonical section "present" if EITHER a heading/xml tag
-    // classifies as it (synonyms like "Rules" → constraints included),
-    // OR the body has a strong opening-line signal (e.g. "You are…",
-    // "Your task is…", "Rules:").
+    // A canonical section is "present" if a heading/xml tag classifies
+    // as it OR body inference finds a strong opening-line signal.
     const found = new Set<CanonicalSection>()
     for (const s of doc.sections) {
       if (s.kind !== 'heading' && s.kind !== 'xml') continue
@@ -22,7 +22,12 @@ const missingSections: Rule = {
     }
     for (const c of inferBodyCanonicals(doc.raw)) found.add(c)
 
-    const missing = REQUIRED_SECTIONS.filter(req => !found.has(req))
+    // A required slot is satisfied when ANY of its family members is
+    // present — persona fills the role slot, guardrails fills the
+    // constraints slot, etc.
+    const missing = REQUIRED_SLOTS.filter(slot =>
+      !SECTION_FAMILY[slot].some(fam => found.has(fam)),
+    )
     if (missing.length === 0) return []
     return [
       {
