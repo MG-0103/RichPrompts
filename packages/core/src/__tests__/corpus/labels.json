@@ -117,6 +117,104 @@
       "relatedNotDuplicate": []
     },
 
+    "restated-across-sections": {
+      "file": "prompts/restated-across-sections.md",
+      "source": "bug-case",
+      "notes": "Same instruction ('Always cite the relevant help-center article...') appears in Constraints and again in Output — a genuine duplicate that a correct pipeline should catch. This is the case where 'related' should DEFINITELY be labelled 'duplicate'.",
+      "sections": [
+        { "anchor": "# Role\n\nYou are a customer support", "until": "# Task", "label": "role" },
+        { "anchor": "# Task\n\nRead the user's message", "until": "# Constraints", "label": "task" },
+        { "anchor": "# Constraints\n\n- Do not promise", "until": "# Output", "label": "constraints" },
+        { "anchor": "# Output\n\nRespond in plain prose.", "until": "# Tone", "label": "output" },
+        { "anchor": "# Tone\n\nFriendly, professional", "label": "tone" }
+      ],
+      "duplicates": [
+        {
+          "texts": [
+            "Always cite the relevant help-center article at the end of every reply.",
+            "Cite the help-center article you referenced at the end of every reply, formatted as \"See: <article title>\"."
+          ],
+          "note": "Same rule (cite the help-center article) restated across Constraints and Output. The Output version adds a formatting spec but the core instruction is the same — a merge should keep both aspects."
+        }
+      ],
+      "contradictions": [],
+      "relatedNotDuplicate": []
+    },
+
+    "similar-tools-different-purpose": {
+      "file": "prompts/similar-tools-different-purpose.md",
+      "source": "bug-case",
+      "notes": "Two tool definitions (search_users, search_orders) that share vocabulary ('searches the ___ database for records matching the query, given a query string') but describe distinct tools. Same class of failure as two-agent-defs. A correct pipeline must NOT cluster them as duplicates.",
+      "sections": [
+        { "anchor": "# Role\n\nYou are a database assistant", "until": "# Tools", "label": "role" },
+        { "anchor": "# Tools\n\n## search_users", "until": "## search_users", "label": "tools" },
+        { "anchor": "## search_users\n\nThe search_users tool", "until": "## search_orders", "label": "tools" },
+        { "anchor": "## search_orders\n\nThe search_orders tool", "until": "## export_query", "label": "tools" },
+        { "anchor": "## export_query\n\nThe export_query tool", "until": "# Constraints", "label": "tools" },
+        { "anchor": "# Constraints\n\n- Never construct", "until": "# Output", "label": "constraints" },
+        { "anchor": "# Output\n\nRespond with a short summary", "label": "output" }
+      ],
+      "duplicates": [],
+      "contradictions": [],
+      "relatedNotDuplicate": [
+        {
+          "texts": [
+            "The search_users tool searches the users database for records matching the query.",
+            "The search_orders tool searches the orders database for records matching the query."
+          ],
+          "note": "Two distinct tools sharing 'searches the ___ database for records matching the query' phrasing. Correct pipeline must NOT flag as duplicate."
+        }
+      ]
+    },
+
+    "contradiction-buried-in-list": {
+      "file": "prompts/contradiction-buried-in-list.md",
+      "source": "bug-case",
+      "notes": "Subtle contradiction inside a bullet list: one bullet says 'Always respond in JSON', a later bullet says 'Respond in plain markdown for simple conceptual questions'. Standard failure mode for contradiction detection — the two statements are in the same section but separated by unrelated bullets.",
+      "sections": [
+        { "anchor": "# Role\n\nYou are an API documentation", "until": "# Task", "label": "role" },
+        { "anchor": "# Task\n\nWhen a developer asks", "until": "# Constraints", "label": "task" },
+        { "anchor": "# Constraints\n\n- Always respond in JSON", "until": "# Output", "label": "constraints" },
+        { "anchor": "# Output\n\nFollow the JSON structure", "until": "# Examples", "label": "output" },
+        { "anchor": "# Examples\n\nFor \"how do I authenticate?\"", "label": "examples" }
+      ],
+      "duplicates": [],
+      "contradictions": [
+        {
+          "texts": [
+            "Always respond in JSON with fields `answer`, `example`, and `endpoint`.",
+            "Respond in plain markdown for simple conceptual questions that don't reference a specific endpoint."
+          ],
+          "note": "Contradiction: 'always JSON' vs 'plain markdown for simple questions'. Same section (Constraints), separated by three unrelated bullets."
+        }
+      ],
+      "relatedNotDuplicate": []
+    },
+
+    "vague-triggers-buried": {
+      "file": "prompts/vague-triggers-buried.md",
+      "source": "bug-case",
+      "notes": "Multiple vague trigger phrases scattered through Constraints ('when appropriate', 'when needed', 'if relevant', 'when necessary', 'where possible'). Tests whether the pipeline catches vague-trigger findings and doesn't cluster them as duplicates (they're similar words but different rules).",
+      "sections": [
+        { "anchor": "# Role\n\nYou are a coding assistant", "until": "# Task", "label": "role" },
+        { "anchor": "# Task\n\nRespond to the developer's request.", "until": "# Constraints", "label": "task" },
+        { "anchor": "# Constraints\n\n- Use the `search_docs`", "until": "# Output", "label": "constraints" },
+        { "anchor": "# Output\n\nReply with either", "until": "# Safety", "label": "output" },
+        { "anchor": "# Safety\n\nNever modify files", "label": "guardrails" }
+      ],
+      "duplicates": [],
+      "contradictions": [],
+      "relatedNotDuplicate": [
+        {
+          "texts": [
+            "Use the `search_docs` tool when it's helpful to check API details.",
+            "Use the `run_tests` tool when needed to verify a change works."
+          ],
+          "note": "Two similar bullets (tool + vague-trigger) but different tools and different purposes. Not duplicates."
+        }
+      ]
+    },
+
     "unheaded-wall": {
       "file": "prompts/unheaded-wall.md",
       "source": "synthesized",
