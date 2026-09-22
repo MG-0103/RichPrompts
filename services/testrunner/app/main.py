@@ -54,6 +54,13 @@ from .segment import (
     DEFAULT_MIN_GAP_CHARS as SEGMENT_DEFAULT_MIN_GAP,
     segment as segment_source,
 )
+from .classify_v2 import (
+    CACHE as CLASSIFY_V2_CACHE,
+    DEFAULT_MODEL as DEFAULT_CLASSIFY_V2_MODEL,
+    ClassifyV2Error,
+    classify_chunk,
+    is_available as classify_v2_available,
+)
 from .mock_runner import run_mock
 from .real_runner import is_available as real_available, run_real
 from .schemas import (
@@ -65,6 +72,9 @@ from .schemas import (
     SegmentPairSimilarity,
     SegmentRequest,
     SegmentResponse,
+    ClassifyV2Request,
+    ClassifyV2Response,
+    ClassifyAlternative,
     EmbedRequest,
     EmbedResponse,
     ExtractionVerdict,
@@ -381,6 +391,36 @@ async def v2_segment(req: SegmentRequest) -> SegmentResponse:
             ],
             gapRegions=[list(t) for t in debug.gap_regions],
         ),
+    )
+
+
+@app.post("/v2/classify", response_model=ClassifyV2Response)
+async def v2_classify(req: ClassifyV2Request) -> ClassifyV2Response:
+    """v2 Phase 2 — hierarchical section classifier."""
+    if not req.text.strip():
+        raise HTTPException(status_code=400, detail="empty text")
+    if len(req.text) > 100_000:
+        raise HTTPException(status_code=413, detail="text exceeds 100,000 chars")
+    ready, reason = classify_v2_available()
+    if not ready:
+        raise HTTPException(status_code=503, detail=f"classifier unavailable: {reason}")
+
+    started = time.perf_counter()
+    try:
+        result, cached = await classify_chunk(req.text, req.model)
+    except ClassifyV2Error as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    duration = (time.perf_counter() - started) * 1000
+    return ClassifyV2Response(
+        family=result["family"],
+        label=result["label"],
+        confidence=result["confidence"],
+        alternatives=[ClassifyAlternative(**a) for a in result["alternatives"]],
+        ambiguous=result["ambiguous"],
+        reasoning=result["reasoning"],
+        cached=cached,
+        model=req.model or DEFAULT_CLASSIFY_V2_MODEL,
+        durationMs=duration,
     )
 
 

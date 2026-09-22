@@ -97,6 +97,17 @@ its 130 MB and we go back to LLM classification.
 
 **Effort:** ~1.5 days (model loading + hierarchical wiring + tests).
 
+**Status (2026-09-22):** Endpoint + LLM backend shipped as MVP —
+gpt-4o-mini hierarchical classifier (services/testrunner/app/
+classify_v2.py, POST /v2/classify). The NLI backend (DeBERTa-v3-base-mnli)
+is held in reserve; the response shape is backend-agnostic so a swap
+later is contained. Rationale: adding transformers + torch is 300MB+
+of new deps and we don't want to commit to that before knowing whether
+classifier quality is worth it. If LLM fails Phase 2's gate on the
+corpus, swap in NLI without changing the API. Unit tests pass (25/25).
+Live corpus gate needs a running sidecar with OPENAI_API_KEY; run
+`npm --workspace packages/core run eval:v2-classify` and record here.
+
 ---
 
 ## Phase 3 — Atomization

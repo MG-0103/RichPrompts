@@ -214,3 +214,25 @@ class SegmentResponse(BaseModel):
     durationMs: float
     debug: SegmentDebugPayload
 
+
+class ClassifyV2Request(BaseModel):
+    text: str
+    model: str | None = None
+
+
+class ClassifyAlternative(BaseModel):
+    label: str
+    confidence: float
+
+
+class ClassifyV2Response(BaseModel):
+    family: str
+    label: str
+    confidence: float
+    alternatives: list[ClassifyAlternative]
+    ambiguous: bool
+    reasoning: str
+    cached: bool
+    model: str
+    durationMs: float
+
