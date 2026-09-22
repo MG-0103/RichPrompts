@@ -354,6 +354,37 @@
       "relatedNotDuplicate": []
     },
 
+    "skill-code-review": {
+      "file": "prompts/skill-code-review.md",
+      "source": "domain",
+      "notes": "SKILL.md-shaped: frontmatter with name/description/variables, then 'When to use' + Instructions/Output/Constraints. Tests classifier on 'When to use' (a skills-specific section that maps to... what? Currently maps to task via 'when' — a taxonomy question).",
+      "sections": [
+        { "anchor": "# When to use\n\nLoad this skill", "until": "# Instructions", "label": "task" },
+        { "anchor": "# Instructions\n\nRead the diff carefully.", "until": "# Output", "label": "task" },
+        { "anchor": "# Output\n\nStructure the review as:", "until": "# Constraints", "label": "output" },
+        { "anchor": "# Constraints\n\n- Do not restate", "until": "# Reference", "label": "constraints" },
+        { "anchor": "# Reference\n\nStyle guide:", "label": "context" }
+      ],
+      "duplicates": [],
+      "contradictions": [],
+      "relatedNotDuplicate": []
+    },
+
+    "skill-debug-stacktrace": {
+      "file": "prompts/skill-debug-stacktrace.md",
+      "source": "domain",
+      "notes": "Second SKILL.md with a Workflow section (maps to task via 'workflow' pattern). Constraints include negative directives ('do not add logging as a substitute for a fix') — tests that negative rules aren't clustered with other constraints.",
+      "sections": [
+        { "anchor": "# When to use\n\nLoad this skill when the user shares", "until": "# Workflow", "label": "task" },
+        { "anchor": "# Workflow\n\n1. Read the top of the stack trace", "until": "# Output", "label": "task" },
+        { "anchor": "# Output\n\n- Root cause:", "until": "# Constraints", "label": "output" },
+        { "anchor": "# Constraints\n\n- Do not propose \"add a null check\"", "label": "constraints" }
+      ],
+      "duplicates": [],
+      "contradictions": [],
+      "relatedNotDuplicate": []
+    },
+
     "unheaded-wall": {
       "file": "prompts/unheaded-wall.md",
       "source": "synthesized",

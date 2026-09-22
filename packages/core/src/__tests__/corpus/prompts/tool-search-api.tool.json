@@ -1,0 +1,32 @@
+{
+  "name": "search_api",
+  "description": "Search across public API endpoints matching a natural-language query. Returns a ranked list of matching endpoints with their signatures and short descriptions. Use this tool when the user asks about API capabilities without naming a specific endpoint.",
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "query": {
+        "type": "string",
+        "description": "Natural-language description of what the caller is looking for."
+      },
+      "api_version": {
+        "type": "string",
+        "description": "Which API version to search. Defaults to the latest stable version.",
+        "enum": ["v1", "v2", "v3", "latest"],
+        "default": "latest"
+      },
+      "limit": {
+        "type": "integer",
+        "description": "Maximum number of results to return.",
+        "minimum": 1,
+        "maximum": 50,
+        "default": 10
+      },
+      "include_deprecated": {
+        "type": "boolean",
+        "description": "Include endpoints marked as deprecated in the results.",
+        "default": false
+      }
+    },
+    "required": ["query"]
+  }
+}
