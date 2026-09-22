@@ -42,6 +42,80 @@
       ]
     },
 
+    "anthropic-style-reviewer": {
+      "file": "prompts/anthropic-style-reviewer.md",
+      "source": "synthesized",
+      "notes": "Anthropic conventions: XML tags for structural sections, <thinking> block for reasoning directives, <examples> block for few-shot. Representative of Claude prompts. Simple example inside <examples> tests that the classifier doesn't confuse example content with a rule.",
+      "sections": [
+        { "anchor": "<role>\nYou are an experienced", "until": "<task>", "label": "role" },
+        { "anchor": "<task>\nReview the code", "until": "<output_format>", "label": "task" },
+        { "anchor": "<output_format>\nStructure your response", "until": "<constraints>", "label": "output" },
+        { "anchor": "<constraints>\n- Never fabricate", "until": "<examples>", "label": "constraints" },
+        { "anchor": "<examples>\n<example>", "until": "<thinking>", "label": "reasoning" },
+        { "anchor": "<thinking>\nBefore responding", "label": "reasoning" }
+      ],
+      "duplicates": [],
+      "contradictions": [],
+      "relatedNotDuplicate": []
+    },
+
+    "openai-style-support": {
+      "file": "prompts/openai-style-support.md",
+      "source": "synthesized",
+      "notes": "OpenAI conventions: markdown headings, terse imperative instructions, safety block at the end, tool-use hints as inline bullets. Representative of ChatGPT-style system prompts.",
+      "sections": [
+        { "anchor": "# Identity\n\nYou are a customer support", "until": "# Instructions", "label": "role" },
+        { "anchor": "# Instructions\n\nAnswer questions", "until": "# Tone", "label": "task" },
+        { "anchor": "# Tone\n\nBe concise.", "until": "# Output", "label": "tone" },
+        { "anchor": "# Output\n\nRespond in plain text.", "until": "# Safety", "label": "output" },
+        { "anchor": "# Safety\n\nRefuse to help with:", "label": "guardrails" }
+      ],
+      "duplicates": [],
+      "contradictions": [],
+      "relatedNotDuplicate": []
+    },
+
+    "gemini-style-analyst": {
+      "file": "prompts/gemini-style-analyst.md",
+      "source": "synthesized",
+      "notes": "Gemini conventions: explicit reasoning-directive section, verbose step-by-step guidance, chain-of-thought made mandatory in output. INCLUDES A LATENT CONTRADICTION: 'Always be thorough in your reasoning' vs 'Be concise where you can' in the same block. Tests whether the pipeline catches subtle contradiction inside one section.",
+      "sections": [
+        { "anchor": "# Persona\n\nYou are a senior data analyst", "until": "# Reasoning approach", "label": "role" },
+        { "anchor": "# Reasoning approach\n\nBefore giving", "until": "# Task", "label": "reasoning" },
+        { "anchor": "# Task\n\nGiven the description", "until": "# Response format", "label": "task" },
+        { "anchor": "# Response format\n\nUse markdown", "until": "# Guardrails", "label": "output" },
+        { "anchor": "# Guardrails\n\n- Never claim", "label": "guardrails" }
+      ],
+      "duplicates": [],
+      "contradictions": [
+        {
+          "texts": [
+            "Always be thorough in your reasoning.",
+            "Be concise where you can."
+          ],
+          "note": "Subtle contradiction inside Guardrails — 'thorough' pulls one way, 'concise' the other, both marked 'always'/'where you can'. Realistic instance of the kind of contradiction that slips through review."
+        }
+      ],
+      "relatedNotDuplicate": []
+    },
+
+    "cline-inspired-coding-agent": {
+      "file": "prompts/cline-inspired-coding-agent.md",
+      "source": "synthesized",
+      "notes": "Open-source coding-agent style (inspired by Cline / Continue / Aider). Model-agnostic. Has role + workflow + tool-rules + editing-conventions + safety. Tests classifier on 'workflow' as a task-family label and 'tool use rules' as constraints.",
+      "sections": [
+        { "anchor": "You are an autonomous coding agent", "until": "# Workflow", "label": "role" },
+        { "anchor": "# Workflow\n\nFor every task", "until": "# Tool use rules", "label": "task" },
+        { "anchor": "# Tool use rules\n\n- Read files", "until": "# Editing conventions", "label": "constraints" },
+        { "anchor": "# Editing conventions\n\n- Match the existing", "until": "# Communication", "label": "constraints" },
+        { "anchor": "# Communication\n\n- After each significant", "until": "# Safety", "label": "constraints" },
+        { "anchor": "# Safety\n\nRefuse:", "label": "guardrails" }
+      ],
+      "duplicates": [],
+      "contradictions": [],
+      "relatedNotDuplicate": []
+    },
+
     "unheaded-wall": {
       "file": "prompts/unheaded-wall.md",
       "source": "synthesized",
