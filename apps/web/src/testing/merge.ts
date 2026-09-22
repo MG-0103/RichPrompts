@@ -16,6 +16,7 @@ export interface MergeResult {
   cached: boolean
   durationMs: number
   model: string
+  refused: boolean
 }
 
 interface ServerResponse {
@@ -24,6 +25,7 @@ interface ServerResponse {
   cached: boolean
   model: string
   durationMs: number
+  refused?: boolean
 }
 
 export async function mergeCluster(
@@ -50,5 +52,6 @@ export async function mergeCluster(
     cached: data.cached,
     durationMs: data.durationMs,
     model: data.model,
+    refused: data.refused ?? false,
   }
 }

@@ -178,4 +178,8 @@ class MergeClusterResponse(BaseModel):
     cached: bool
     model: str
     durationMs: float
+    # True when the LLM judged the members to be describing distinct
+    # entities and declined to merge. `merged` is "" in that case;
+    # `reason` names the distinct entities.
+    refused: bool = False
 

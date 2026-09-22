@@ -29,18 +29,32 @@ REQUEST_TIMEOUT_S = 30.0
 SYSTEM_PROMPT = (
     "You merge near-duplicate paragraphs from a system prompt into ONE "
     "paragraph. The inputs are separate paragraphs from the SAME prompt "
-    "that a linter flagged as saying the same thing.\n\n"
-    "Your merge must:\n"
-    "1. Keep every unique instruction, constraint, or fact from any input.\n"
-    "2. Drop restatements — if two inputs say the same rule, keep it once.\n"
+    "that a linter flagged as saying the same thing. But the linter is "
+    "based on shared vocabulary — it can flag paragraphs that share "
+    "words but describe DISTINCT things (two different agents, two "
+    "different tools, two different personas).\n\n"
+    "FIRST, judge whether the paragraphs are actually restating the "
+    "same rule/fact/instruction, or whether they describe distinct "
+    "entities that happen to share vocabulary.\n\n"
+    "IF they describe distinct entities (e.g. two different agents "
+    "with different names, roles, or scopes; two different tools that "
+    "each have their own definition; a role and a task that share "
+    "keywords), REFUSE to merge and return:\n"
+    '{"merged": null, "refused": true, "reason": "one sentence naming '
+    'the distinct entities that would be lost by merging"}\n\n'
+    "OTHERWISE, produce the merge. Your merge must:\n"
+    "1. Keep every unique instruction, constraint, or fact from any "
+    "input.\n"
+    "2. Drop restatements — if two inputs say the same rule, keep it "
+    "once.\n"
     "3. Use whichever wording is clearest and most specific.\n"
-    "4. Preserve the tone (imperative → imperative, declarative → "
+    "4. Preserve tone (imperative → imperative, declarative → "
     "declarative). Do not editorialize.\n"
-    "5. Return a paragraph, not a bulleted list, unless every input was "
-    "a list.\n\n"
+    "5. Return a paragraph, not a bulleted list, unless every input "
+    "was a list.\n\n"
     "Output exactly this JSON, no prose:\n"
-    '{"merged": "the merged paragraph", "reason": "one sentence on '
-    'what was consolidated or dropped"}'
+    '{"merged": "the merged paragraph", "refused": false, "reason": '
+    '"one sentence on what was consolidated or dropped"}'
 )
 
 
@@ -145,10 +159,15 @@ async def merge_cluster(
     except json.JSONDecodeError:
         raise MergeError(f"non-JSON merge response: {content[:300]}")
 
-    merged = str(parsed.get("merged", "")).strip()
+    refused = bool(parsed.get("refused", False))
+    raw_merged = parsed.get("merged")
+    merged = "" if raw_merged is None else str(raw_merged).strip()
     reason = str(parsed.get("reason", ""))[:400]
-    if not merged:
-        raise MergeError("empty merged paragraph in response")
-    result = {"merged": merged, "reason": reason}
+    if refused:
+        result = {"merged": "", "refused": True, "reason": reason}
+    else:
+        if not merged:
+            raise MergeError("empty merged paragraph in non-refused response")
+        result = {"merged": merged, "refused": False, "reason": reason}
     CACHE.put(key, result)
     return cast(dict, result), False

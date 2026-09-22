@@ -322,6 +322,7 @@ async def merge_cluster_endpoint(req: MergeClusterRequest) -> MergeClusterRespon
         cached=cached,
         model=req.model or DEFAULT_MERGE_MODEL,
         durationMs=duration,
+        refused=bool(result.get("refused", False)),
     )
 
 
