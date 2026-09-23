@@ -236,3 +236,27 @@ class ClassifyV2Response(BaseModel):
     model: str
     durationMs: float
 
+
+class AtomizeRequest(BaseModel):
+    paragraph: str
+    section: str | None = None
+    model: str | None = None
+
+
+class AtomOut(BaseModel):
+    text: str
+    kind: str
+    startOffset: int
+    endOffset: int
+
+
+class AtomizeResponse(BaseModel):
+    atoms: list[AtomOut]
+    # Non-fatal warnings — atoms the LLM proposed but we couldn't
+    # locate in the source (verbatim-substring rule). Useful for
+    # debugging bad prompts.
+    warnings: list[str]
+    cached: bool
+    model: str
+    durationMs: float
+

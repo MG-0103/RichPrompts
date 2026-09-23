@@ -13,7 +13,8 @@
     "test:watch": "vitest",
     "eval:v1": "tsx scripts/eval-v1.ts",
     "eval:v2-segment": "tsx scripts/eval-v2-segment.ts",
-    "eval:v2-classify": "tsx scripts/eval-v2-classify.ts"
+    "eval:v2-classify": "tsx scripts/eval-v2-classify.ts",
+    "eval:v2-atomize": "tsx scripts/eval-v2-atomize.ts"
   },
   "devDependencies": {
     "tsx": "^4.19.0",

@@ -135,6 +135,21 @@ review — pass/fail per case.
 
 **Effort:** ~1.5 days (mostly prompt iteration + eval).
 
+**Status (2026-09-23):** Endpoint + gpt-4o-mini atomizer shipped
+(services/testrunner/app/atomize.py, POST /v2/atomize). Prompt gives
+5 few-shot rules covering compound sentences, conditionals, bullets,
+embedded examples, and negations. Atoms are emitted as verbatim
+substrings — offsets are resolved server-side via left-to-right
+walking string search; any non-verbatim atom is dropped with a
+warning. Unit tests pass (33/33). Atom labels added for 4 paragraph
+sections across 3 bug-case prompts (restated-across-sections × 2
+sections, contradiction-buried-in-list, two-agent-defs). More
+sections need atom labels before the Phase 3 gate can be evaluated
+on a representative sample; that labeling is the next honest step
+and requires human judgment on atomization edge cases. Once labels
+exist, run `npm --workspace packages/core run eval:v2-atomize`
+against a live sidecar.
+
 ---
 
 ## Phase 4 — Within-section match & deterministic scoring

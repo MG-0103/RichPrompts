@@ -22,6 +22,13 @@
       "file": "prompts/two-agent-defs.md",
       "source": "bug-case",
       "notes": "Reconstruction of the failure mode: two distinct agent definitions clustered by v1 as duplicates because they share the 'agent' vocabulary. Regression fence — every pipeline MUST label this as related-not-duplicate.",
+      "atoms": {
+        "constraints": [
+          {"text": "Never invoke both agents on the same question", "kind": "imperative"},
+          {"text": "Prefer the code review agent when the user's intent is unclear", "kind": "imperative"},
+          {"text": "Always name which agent handled the response", "kind": "imperative"}
+        ]
+      },
       "sections": [
         { "anchor": "# Role\n\nYou orchestrate", "until": "# Agents", "label": "role" },
         { "anchor": "# Agents\n\n## Code Review Agent", "until": "## Code Review Agent", "label": "agents" },
@@ -121,6 +128,19 @@
       "file": "prompts/restated-across-sections.md",
       "source": "bug-case",
       "notes": "Same instruction ('Always cite the relevant help-center article...') appears in Constraints and again in Output — a genuine duplicate that a correct pipeline should catch. This is the case where 'related' should DEFINITELY be labelled 'duplicate'.",
+      "atoms": {
+        "constraints": [
+          {"text": "Do not promise any refund or discount without checking with a human agent", "kind": "imperative"},
+          {"text": "Always cite the relevant help-center article at the end of every reply", "kind": "imperative"},
+          {"text": "Never speculate about the product roadmap", "kind": "imperative"},
+          {"text": "Be concise: at most three short paragraphs per reply", "kind": "imperative"}
+        ],
+        "output": [
+          {"text": "Respond in plain prose", "kind": "imperative"},
+          {"text": "Do not use markdown headings inside your reply", "kind": "imperative"},
+          {"text": "Cite the help-center article you referenced at the end of every reply, formatted as \"See: <article title>\"", "kind": "imperative"}
+        ]
+      },
       "sections": [
         { "anchor": "# Role\n\nYou are a customer support", "until": "# Task", "label": "role" },
         { "anchor": "# Task\n\nRead the user's message", "until": "# Constraints", "label": "task" },
@@ -171,6 +191,17 @@
       "file": "prompts/contradiction-buried-in-list.md",
       "source": "bug-case",
       "notes": "Subtle contradiction inside a bullet list: one bullet says 'Always respond in JSON', a later bullet says 'Respond in plain markdown for simple conceptual questions'. Standard failure mode for contradiction detection — the two statements are in the same section but separated by unrelated bullets.",
+      "atoms": {
+        "constraints": [
+          {"text": "Always respond in JSON with fields `answer`, `example`, and `endpoint`", "kind": "imperative"},
+          {"text": "Reference only endpoints that exist in the current API version", "kind": "imperative"},
+          {"text": "Include a curl example for every response so the developer can copy-paste", "kind": "imperative"},
+          {"text": "Never fabricate a parameter name or response field", "kind": "imperative"},
+          {"text": "Respond in plain markdown for simple conceptual questions that don't reference a specific endpoint", "kind": "imperative"},
+          {"text": "Do not include internal-only endpoints (those prefixed with `_internal/`)", "kind": "imperative"},
+          {"text": "Cite the docs version you looked at in every response", "kind": "imperative"}
+        ]
+      },
       "sections": [
         { "anchor": "# Role\n\nYou are an API documentation", "until": "# Task", "label": "role" },
         { "anchor": "# Task\n\nWhen a developer asks", "until": "# Constraints", "label": "task" },

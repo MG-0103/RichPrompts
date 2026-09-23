@@ -61,6 +61,13 @@ from .classify_v2 import (
     classify_chunk,
     is_available as classify_v2_available,
 )
+from .atomize import (
+    CACHE as ATOMIZE_CACHE,
+    DEFAULT_MODEL as DEFAULT_ATOMIZE_MODEL,
+    AtomizeError,
+    atomize_paragraph,
+    is_available as atomize_available,
+)
 from .mock_runner import run_mock
 from .real_runner import is_available as real_available, run_real
 from .schemas import (
@@ -75,6 +82,9 @@ from .schemas import (
     ClassifyV2Request,
     ClassifyV2Response,
     ClassifyAlternative,
+    AtomizeRequest,
+    AtomizeResponse,
+    AtomOut,
     EmbedRequest,
     EmbedResponse,
     ExtractionVerdict,
@@ -420,6 +430,32 @@ async def v2_classify(req: ClassifyV2Request) -> ClassifyV2Response:
         reasoning=result["reasoning"],
         cached=cached,
         model=req.model or DEFAULT_CLASSIFY_V2_MODEL,
+        durationMs=duration,
+    )
+
+
+@app.post("/v2/atomize", response_model=AtomizeResponse)
+async def v2_atomize(req: AtomizeRequest) -> AtomizeResponse:
+    """v2 Phase 3 — decompose a paragraph into atomic instructions."""
+    if not req.paragraph.strip():
+        raise HTTPException(status_code=400, detail="empty paragraph")
+    if len(req.paragraph) > 16000:
+        raise HTTPException(status_code=413, detail="paragraph exceeds 16,000 chars")
+    ready, reason = atomize_available()
+    if not ready:
+        raise HTTPException(status_code=503, detail=f"atomizer unavailable: {reason}")
+
+    started = time.perf_counter()
+    try:
+        result, cached = await atomize_paragraph(req.paragraph, req.section, req.model)
+    except AtomizeError as e:
+        raise HTTPException(status_code=502, detail=str(e))
+    duration = (time.perf_counter() - started) * 1000
+    return AtomizeResponse(
+        atoms=[AtomOut(**a) for a in result["atoms"]],
+        warnings=result["warnings"],
+        cached=cached,
+        model=req.model or DEFAULT_ATOMIZE_MODEL,
         durationMs=duration,
     )
 
