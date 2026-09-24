@@ -191,6 +191,10 @@ class SegmentRequest(BaseModel):
     knownBoundaries: list[int] = []
     threshold: float | None = None
     minGapChars: int | None = None
+    # Skip gaps smaller than this many chars — well-headed docs have
+    # short gaps between headings and running the chunker on them
+    # introduces false boundaries in single-section content.
+    minRegionChars: int | None = None
     model: str | None = None
 
 

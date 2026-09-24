@@ -91,17 +91,16 @@ def test_normalize_reasoning_truncated():
 
 def test_normalize_not_ambiguous_when_gap_clearly_exceeds():
     """When the confidence gap is clearly larger than the threshold,
-    the chunk is unambiguous. Avoid sitting on the exact 0.1
-    boundary — float comparison is fuzzy there and either verdict
-    is defensible."""
+    the chunk is unambiguous. Use a gap comfortably above
+    AMBIGUOUS_GAP (0.25) so this test survives future gap tweaks."""
     parsed = {
         "family": "textual",
         "label": "task",
-        "confidence": 0.75,
+        "confidence": 0.90,
         "alternatives": [
-            {"label": "role", "confidence": 0.60},
+            {"label": "role", "confidence": 0.05},
         ],
     }
     r = _normalize(parsed)
-    # Gap is 0.15 — well above AMBIGUOUS_GAP.
+    # Gap is 0.85 — well above AMBIGUOUS_GAP.
     assert r["ambiguous"] is False

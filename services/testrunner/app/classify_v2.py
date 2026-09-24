@@ -75,6 +75,32 @@ SYSTEM_PROMPT = (
     "When family is tool/skill/agent, the label is that same family "
     "name (leaf = family for these). When family is textual, produce "
     "the specific level-2 label.\n\n"
+    "CRITICAL DISTINCTIONS — these are the confusion cases from "
+    "eval:\n"
+    "* A section INSIDE a skill file (a 'When to use' block, a "
+    "'Workflow' step list, a Constraints list) is TEXTUAL, not "
+    "family=skill. Family=skill means the CHUNK ITSELF is a raw "
+    "skill definition (frontmatter + description). 'When to use' → "
+    "family=textual, label=task. 'Workflow' → family=textual, "
+    "label=task.\n"
+    "* An Output section that CONTAINS a JSON schema block is still "
+    "family=textual, label=output. Family=tool only when the CHUNK "
+    "ITSELF is a raw tool definition (name + description + input "
+    "schema fields at top level). A prose description of expected "
+    "output shape, even with a code fence, is output.\n"
+    "* An Agents section that starts with orchestration prose "
+    "(before the sub-agent definitions) is family=textual with "
+    "label=agents. Do NOT call it context — context is background "
+    "info about the domain, not about the model's sub-agents. "
+    "family=agent is reserved for the DEFINITION of ONE sub-agent.\n"
+    "* A Workflow section that describes ORDERED delegation between "
+    "sub-agents (step 1: delegate to X, step 2: delegate to Y) is "
+    "still family=textual, label=task. It's the ORCHESTRATION "
+    "instruction to the model, not a sub-agent definition.\n"
+    "* 'Identity' and 'Persona' headings almost always classify as "
+    "persona (fictional identity). 'Role' headings classify as role "
+    "(job description). Ambiguity between the two is genuine and "
+    "should show up in the confidence.\n\n"
     "Return exactly this JSON, no prose:\n"
     "{"
     '\"family\": \"textual|tool|skill|agent\", '
@@ -86,11 +112,17 @@ SYSTEM_PROMPT = (
     '], '
     '\"reasoning\": \"one short sentence naming the strongest signal\"'
     "}\n"
-    "The confidence + top-2 alternatives together should reflect your "
-    "actual uncertainty. When the chunk is genuinely ambiguous, "
-    "distribute confidence: e.g. label='constraints' conf=0.55, "
-    "alternatives=[{output,0.30},{guardrails,0.10}]. Do not force "
-    "high confidence when you're guessing."
+    "CONFIDENCE CALIBRATION: your confidence distribution must "
+    "reflect real uncertainty, not the default urge to sound "
+    "certain. Guide:\n"
+    "* Textbook case (only one label fits): top=0.90–0.95, "
+    "alternatives ≈ 0.05\n"
+    "* Reasonable but not perfect fit: top=0.70–0.85, top alt=0.10–0.25\n"
+    "* Two labels really do apply: top=0.50–0.65, top alt=0.30–0.45 "
+    "(gap ≤ 0.25 — the ambiguity signal downstream cares about)\n"
+    "Do not force 0.90+ for the ambiguous cases just because they're "
+    "asking you to pick one. The ambiguous flag is USEFUL — it "
+    "routes hard cases to a human. Suppressing it hurts the pipeline."
 )
 
 
@@ -141,7 +173,13 @@ class ClassifyV2Cache:
 
 CACHE = ClassifyV2Cache()
 
-AMBIGUOUS_GAP = 0.10
+# Confidence gap below which we mark the chunk as ambiguous. First
+# eval showed 0/113 flagged at 0.10 — gpt-4o-mini almost always emits
+# top confidence ≥ 0.85 for a decisive answer and 0.60–0.70 for the
+# genuinely uncertain ones, with runner-up ~0.10–0.30. Real ambiguous
+# cases sit in the 0.15–0.30 gap band, so 0.25 catches them without
+# false-flagging the confident majority.
+AMBIGUOUS_GAP = 0.25
 
 
 def _normalize(parsed: dict) -> dict:

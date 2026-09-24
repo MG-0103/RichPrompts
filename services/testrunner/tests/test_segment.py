@@ -119,9 +119,12 @@ def test_segment_emits_boundary_at_topic_shift():
         "This talks about TOPIC_A in detail. TOPIC_A comes up again here. "
         "But now TOPIC_B changes the subject. TOPIC_B keeps going in this line."
     )
+    # Test text is ~140 chars, well under the 400-char default min
+    # region size; explicitly disable that filter here so the mock
+    # algorithm can be exercised.
     with patch("app.segment.embed_batch", side_effect=_fake_embed):
         boundaries, debug = asyncio.run(
-            segment(text, known_boundaries=[], threshold=0.5)
+            segment(text, known_boundaries=[], threshold=0.5, min_region_chars=0)
         )
     # One boundary expected at the shift from TOPIC_A → TOPIC_B.
     assert len(boundaries) == 1
@@ -140,7 +143,7 @@ def test_segment_respects_known_boundaries():
     )
     with patch("app.segment.embed_batch", side_effect=_fake_embed):
         boundaries, _ = asyncio.run(
-            segment(text, known_boundaries=[0, 85], threshold=0.5)
+            segment(text, known_boundaries=[0, 85], threshold=0.5, min_region_chars=0)
         )
     # No shift within either gap → no new boundaries.
     assert boundaries == []
@@ -150,7 +153,7 @@ def test_segment_no_boundary_when_similar_throughout():
     text = "TOPIC_A first. TOPIC_A second. TOPIC_A third. TOPIC_A fourth."
     with patch("app.segment.embed_batch", side_effect=_fake_embed):
         boundaries, _ = asyncio.run(
-            segment(text, known_boundaries=[], threshold=0.5)
+            segment(text, known_boundaries=[], threshold=0.5, min_region_chars=0)
         )
     assert boundaries == []
 
@@ -163,7 +166,25 @@ def test_segment_merges_close_boundaries():
     )
     with patch("app.segment.embed_batch", side_effect=_fake_embed):
         boundaries, _ = asyncio.run(
-            segment(text, known_boundaries=[], threshold=0.5, min_gap_chars=200)
+            segment(text, known_boundaries=[], threshold=0.5,
+                    min_gap_chars=200, min_region_chars=0)
         )
     # min_gap_chars=200 forces merge; expect at most 1 boundary.
     assert len(boundaries) <= 1
+
+
+def test_segment_skips_small_regions_by_default():
+    """A single gap smaller than min_region_chars should be skipped
+    entirely — this is the fix for the precision-tanking bug in
+    the first live eval on well-headed prompts."""
+    # ~140-char text, single gap. Default min_region_chars=400
+    # means the chunker skips it despite a topic shift being present.
+    text = (
+        "This talks about TOPIC_A in detail. TOPIC_A comes up again here. "
+        "But now TOPIC_B changes the subject. TOPIC_B keeps going in this line."
+    )
+    with patch("app.segment.embed_batch", side_effect=_fake_embed):
+        boundaries, _ = asyncio.run(
+            segment(text, known_boundaries=[], threshold=0.5)  # default min_region=400
+        )
+    assert boundaries == []

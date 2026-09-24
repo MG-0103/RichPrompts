@@ -52,6 +52,7 @@ from .merge import (
 from .segment import (
     DEFAULT_THRESHOLD as SEGMENT_DEFAULT_THRESHOLD,
     DEFAULT_MIN_GAP_CHARS as SEGMENT_DEFAULT_MIN_GAP,
+    DEFAULT_MIN_REGION_CHARS as SEGMENT_DEFAULT_MIN_REGION,
     segment as segment_source,
 )
 from .classify_v2 import (
@@ -375,11 +376,13 @@ async def v2_segment(req: SegmentRequest) -> SegmentResponse:
     started = time.perf_counter()
     threshold = req.threshold if req.threshold is not None else SEGMENT_DEFAULT_THRESHOLD
     min_gap = req.minGapChars if req.minGapChars is not None else SEGMENT_DEFAULT_MIN_GAP
+    min_region = req.minRegionChars if req.minRegionChars is not None else SEGMENT_DEFAULT_MIN_REGION
     boundaries, debug = await segment_source(
         req.source,
         req.knownBoundaries,
         threshold=threshold,
         min_gap_chars=min_gap,
+        min_region_chars=min_region,
         model=req.model,
     )
     duration = (time.perf_counter() - started) * 1000

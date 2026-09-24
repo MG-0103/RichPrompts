@@ -38,6 +38,14 @@ from .embed import embed_batch
 
 DEFAULT_THRESHOLD = 0.65
 DEFAULT_MIN_GAP_CHARS = 150
+# Minimum region length in chars before the chunker will run inside a
+# gap. Well-headed prompts have short gaps between headings (single-
+# section content), and running the chunker inside those is what
+# tanked precision in the first eval — we introduce boundaries
+# where the section is already one topical unit. This filter keeps
+# the chunker out of small gaps and only runs it on regions that
+# plausibly contain multiple topics.
+DEFAULT_MIN_REGION_CHARS = 400
 MIN_SENTENCE_CHARS = 10
 
 # Sentence boundary: end-of-sentence punctuation followed by whitespace,
@@ -147,6 +155,7 @@ async def segment(
     known_boundaries: list[int],
     threshold: float = DEFAULT_THRESHOLD,
     min_gap_chars: int = DEFAULT_MIN_GAP_CHARS,
+    min_region_chars: int = DEFAULT_MIN_REGION_CHARS,
     model: str | None = None,
 ) -> tuple[list[int], SegmentDebug]:
     """Return (new_boundaries, debug)."""
@@ -163,9 +172,17 @@ async def segment(
 
     # Group sentences by gap region — only sentences fully inside the
     # SAME gap can produce a cross-sentence boundary within that gap.
+    # Skip gaps smaller than `min_region_chars`: single-section content
+    # already partitioned by regex/heading. Running the chunker inside
+    # those regions was the precision-tanking bug in the first eval.
     per_gap: list[list[Sentence]] = [[] for _ in gaps]
+    active_gap: list[bool] = [
+        (ge - gs) >= min_region_chars for (gs, ge) in gaps
+    ]
     for s in sentences:
         for i, (gs, ge) in enumerate(gaps):
+            if not active_gap[i]:
+                continue
             if s.start >= gs and s.end <= ge:
                 per_gap[i].append(s)
                 break

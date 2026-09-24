@@ -63,9 +63,29 @@ below 80% we're introducing more noise than signal.
 **Effort:** ~1 day.
 
 **Status (2026-09-22):** Endpoint + segmenter shipped. Unit tests pass
-(16/16) with mocked embeddings. Live corpus gate needs a running
-sidecar with `OPENAI_API_KEY`; run `npm --workspace packages/core run
-eval:v2-segment` against a live sidecar and record the result here.
+(16/16) with mocked embeddings.
+
+**Live eval v1 (2026-09-24) — GATE FAILED across all thresholds:**
+
+```
+Threshold  v1 P    v1 R    v2 P    v2 R    Delta
+0.60       98.9%   83.2%   46.2%   90.3%   +7.1 R, -52.7 P
+0.65       98.9%   83.2%   45.9%   90.3%   +7.1 R, -53.0 P
+0.70       98.9%   83.2%   44.8%   88.5%   +5.3 R, -54.1 P
+0.75       98.9%   83.2%   44.8%   88.5%   +5.3 R, -54.1 P
+```
+
+Recall lifts modestly, but precision tanks. Root cause: chunker was
+running in every gap regardless of size. Well-headed prompts have
+short gaps between headings — single-section content — and running
+the chunker inside those introduces false boundaries.
+
+**Fix (v2, this session):** `DEFAULT_MIN_REGION_CHARS = 400` — skip
+gaps smaller than 400 chars entirely. Well-headed prompts see no
+extra boundaries from the chunker. Sparsely-headed prompts
+(unheaded-wall, short-skeleton, some domain prompts) still get
+chunked. Exposed via `minRegionChars` request param. Re-run eval
+against the sidecar and record results below.
 
 ---
 
@@ -101,12 +121,42 @@ its 130 MB and we go back to LLM classification.
 gpt-4o-mini hierarchical classifier (services/testrunner/app/
 classify_v2.py, POST /v2/classify). The NLI backend (DeBERTa-v3-base-mnli)
 is held in reserve; the response shape is backend-agnostic so a swap
-later is contained. Rationale: adding transformers + torch is 300MB+
-of new deps and we don't want to commit to that before knowing whether
-classifier quality is worth it. If LLM fails Phase 2's gate on the
-corpus, swap in NLI without changing the API. Unit tests pass (25/25).
-Live corpus gate needs a running sidecar with OPENAI_API_KEY; run
-`npm --workspace packages/core run eval:v2-classify` and record here.
+later is contained.
+
+**Live eval v1 (2026-09-24) — GATES PASSED:**
+
+```
+Family top-1 accuracy   93.8%   (106 / 113)   [gate ≥ 80% ✓]
+Leaf   top-1 accuracy   82.3%   ( 93 / 113)   [gate ≥ 65% ✓]
+Ambiguous cases          0 / 113               [broken]
+```
+
+Two real defects to address before Phase 4:
+
+1. Calibration broken — 0/113 flagged as ambiguous. gpt-4o-mini
+   emits top-confidence 0.85–1.00 for almost everything. Some
+   wrong predictions came in at 0.60–0.95, so the model isn't
+   entirely deaf to uncertainty, but AMBIGUOUS_GAP=0.10 never
+   fires.
+2. Systematic confusions (from the printed matrix):
+   - task→skill×2 (SKILL.md's "When to use" / Workflow classified
+     as family=skill)
+   - output→tool×1 (JSON schema inside Output Schema)
+   - agents→context×2 (Agents-section intro prose)
+   - task→agent×1 (multi-agent orchestrator Workflow section)
+
+**Fixes (v2, this session):**
+- `AMBIGUOUS_GAP` bumped 0.10 → 0.25 (based on observed 0.60–0.70
+  confidences on wrong predictions; the calibration signal exists,
+  it's just below the old threshold).
+- Prompt strengthened with explicit distinctions on the four
+  confusion cases and a calibration-guidance block that tells the
+  model to distribute confidence realistically when two labels
+  really apply.
+
+Real fix for calibration long-term: logprobs over label tokens.
+That's a 2-hour follow-up when we know the prompt fix isn't
+enough.
 
 ---
 
@@ -149,6 +199,26 @@ on a representative sample; that labeling is the next honest step
 and requires human judgment on atomization edge cases. Once labels
 exist, run `npm --workspace packages/core run eval:v2-atomize`
 against a live sidecar.
+
+**Live eval v1 (2026-09-24) — GATE PASSED but UNDER-POWERED:**
+
+```
+4 paragraphs, all bug-case prompts:
+  Precision  100.0%
+  Recall     100.0%
+  F1         100.0%
+```
+
+100% across 4 samples means atomizer works on the labelled inputs
+(compound-split constraints, negation splits, cross-section
+restatements), but the test is not a real gate at that sample
+size. Need ~10 more paragraph sections labelled with expected
+atoms before this number is trustworthy. Priority sections to
+label next: multi-agent-orchestrator/workflow (a big list with
+conditional bullets), scientific-research-assistant/reasoning
+(ordered numbered steps), vague-triggers-buried/constraints
+(vague-trigger phrases), gemini-style-analyst/guardrails
+(negation + calibration language).
 
 ---
 
